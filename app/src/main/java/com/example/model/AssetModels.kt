@@ -3,6 +3,51 @@ package com.example.model
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
+enum class AppScreen {
+    LOGIN,
+    HOME_HUB,
+    ASSET_INVENTORY,
+    DOCUMENT_UPLOAD
+}
+
+data class UserSession(
+    val fullName: String,
+    val personnelCode: String,
+    val roleTitle: String,
+    val branchName: String,
+    val branchCode: String
+)
+
+enum class DocumentCategory(val code: String, val persianTitle: String, val subtitle: String) {
+    MINUTES("MINUTES", "صورتجلسه", "صورتجلسه امضاشده اموال‌گردانی شعبه"),
+    INVOICE("INVOICE", "فاکتور", "فاکتور خرید، رسید انبار یا حواله انتقال"),
+    ASSET_PHOTO("ASSET_PHOTO", "تصویر کالا", "تصاویر کلی چیدمان و پلاک دارایی‌ها")
+}
+
+data class StagedDocument(
+    val id: String,
+    val title: String,
+    val category: DocumentCategory,
+    val photoPath: String,
+    val fileName: String,
+    val sizeKb: Int
+)
+
+@Entity(tableName = "uploaded_documents")
+data class UploadedDocumentRecord(
+    @PrimaryKey
+    val id: String,
+    val storeBranch: String,
+    val categoryCode: String,
+    val categoryTitle: String,
+    val title: String,
+    val photoPath: String,
+    val fileName: String,
+    val sizeKb: Int,
+    val uploadedBy: String,
+    val uploadedAt: Long = System.currentTimeMillis()
+)
+
 enum class AssetStatus(val code: String, val persianTitle: String) {
     PENDING("PENDING", "در انتظار بررسی"),
     CONFIRMED("CONFIRMED", "تایید شده"),
@@ -87,6 +132,9 @@ data class AuditSummaryStats(
     val completedCount: Int
         get() = (totalCount - pendingCount - missingPhotoCount - incompleteDiscrepancyCount).coerceAtLeast(0)
 
+    val completionRatio: Float
+        get() = if (totalCount == 0) 0f else (completedCount.toFloat() / totalCount.toFloat()).coerceIn(0f, 1f)
+
     val isReadyForFinalExport: Boolean
         get() = totalCount > 0 &&
             pendingCount == 0 &&
@@ -102,6 +150,17 @@ object StoreBranches {
         "شعبه تجریش",
         "شعبه پالادیوم"
     )
+
+    fun codeForBranch(branch: String): String {
+        return when (branch) {
+            "شعبه مرکزی" -> "۱۰۱"
+            "شعبه ونک" -> "۱۰۲"
+            "شعبه سعادت‌آباد" -> "۱۰۳"
+            "شعبه تجریش" -> "۱۰۴"
+            "شعبه پالادیوم" -> "۱۰۵"
+            else -> "۱۰۰"
+        }
+    }
 }
 
 object PersianTextUtils {

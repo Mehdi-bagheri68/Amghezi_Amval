@@ -7,17 +7,23 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AssetDatabase
 import com.example.data.AssetRepository
+import com.example.model.AppScreen
 import com.example.model.AssetRecord
 import com.example.model.AssetStatus
 import com.example.model.AuditFilterTab
 import com.example.model.AuditSummaryStats
+import com.example.model.DocumentCategory
 import com.example.model.PersianTextUtils
+import com.example.model.StagedDocument
 import com.example.model.StoreBranches
+import com.example.model.UploadedDocumentRecord
+import com.example.model.UserSession
 import com.example.util.CompressedPhotoResult
 import com.example.util.ExcelExportPayload
 import com.example.util.ExcelHelper
 import com.example.util.ImageCompressor
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,7 +32,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.io.File
 import java.util.UUID
 
 data class ValidationBlockAlert(
@@ -48,6 +53,22 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
     )
     val selectedBranch: StateFlow<String> = _selectedBranch.asStateFlow()
 
+    // Navigation & Authentication Session State
+    private val _userSession = MutableStateFlow<UserSession?>(loadSavedSession())
+    val userSession: StateFlow<UserSession?> = _userSession.asStateFlow()
+
+    private val _currentScreen = MutableStateFlow(
+        if (_userSession.value != null) AppScreen.HOME_HUB else AppScreen.LOGIN
+    )
+    val currentScreen: StateFlow<AppScreen> = _currentScreen.asStateFlow()
+
+    private val _isLoggingIn = MutableStateFlow(false)
+    val isLoggingIn: StateFlow<Boolean> = _isLoggingIn.asStateFlow()
+
+    private val _loginError = MutableStateFlow<String?>(null)
+    val loginError: StateFlow<String?> = _loginError.asStateFlow()
+
+    // Asset Inventory Filter & Search State
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
@@ -75,10 +96,19 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
     private val _isBusy = MutableStateFlow(false)
     val isBusy: StateFlow<Boolean> = _isBusy.asStateFlow()
 
+    // Document Upload Screen State
+    private val _selectedDocCategory = MutableStateFlow(DocumentCategory.MINUTES)
+    val selectedDocCategory: StateFlow<DocumentCategory> = _selectedDocCategory.asStateFlow()
+
+    private val _stagedDocuments = MutableStateFlow<List<StagedDocument>>(emptyList())
+    val stagedDocuments: StateFlow<List<StagedDocument>> = _stagedDocuments.asStateFlow()
+
+    private val _uploadProgress = MutableStateFlow<Float?>(null)
+    val uploadProgress: StateFlow<Float?> = _uploadProgress.asStateFlow()
+
     val branchAssets: StateFlow<List<AssetRecord>>
-
+    val branchUploadedDocuments: StateFlow<List<UploadedDocumentRecord>>
     val summaryStats: StateFlow<AuditSummaryStats>
-
     val filteredAssets: StateFlow<List<AssetRecord>>
 
     init {
@@ -91,6 +121,14 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
 
         branchAssets = _selectedBranch
             .flatMapLatest { branch -> repository.observeAssetsForBranch(branch) }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList()
+            )
+
+        branchUploadedDocuments = _selectedBranch
+            .flatMapLatest { branch -> repository.observeDocumentsForBranch(branch) }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),
@@ -141,6 +179,99 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    private fun loadSavedSession(): UserSession? {
+        val isLogged = prefs.getBoolean("is_logged_in", false)
+        if (!isLogged) return null
+        val branch = prefs.getString("selected_branch", StoreBranches.ALL_BRANCHES.first())
+            ?: StoreBranches.ALL_BRANCHES.first()
+        return UserSession(
+            fullName = prefs.getString("user_full_name", "مهندس علی باقری") ?: "مهندس علی باقری",
+            personnelCode = prefs.getString("user_personnel_code", "۹۸۴۱۲") ?: "۹۸۴۱۲",
+            roleTitle = prefs.getString("user_role", "ممیز ارشد اموال شعب") ?: "ممیز ارشد اموال شعب",
+            branchName = branch,
+            branchCode = StoreBranches.codeForBranch(branch)
+        )
+    }
+
+    fun clearLoginError() {
+        _loginError.value = null
+    }
+
+    fun performLogin(
+        usernameOrCode: String,
+        password: String,
+        selectedBranch: String
+    ) {
+        val cleanUser = usernameOrCode.trim()
+        val cleanPass = password.trim()
+        if (cleanUser.isBlank()) {
+            _loginError.value = "لطفاً نام کاربری یا کد پرسنلی ممیز را وارد نمایید."
+            return
+        }
+        if (cleanPass.length < 4) {
+            _loginError.value = "رمز عبور باید حداقل ۴ کاراکتر باشد."
+            return
+        }
+
+        viewModelScope.launch {
+            _loginError.value = null
+            _isLoggingIn.value = true
+            delay(550) // Smooth UX transition for login spinner
+
+            val displayName = when {
+                cleanUser.contains("admin", ignoreCase = true) || cleanUser == "101" || cleanUser == "۱۰۱" ->
+                    "مهندس علی باقری"
+                cleanUser.all { it.isDigit() || it in '۰'..'۹' } ->
+                    "ممیز ارشد (کد ${PersianTextUtils.toPersianDigits(cleanUser)})"
+                else -> cleanUser
+            }
+            val pCode = if (cleanUser.any { it.isDigit() || it in '۰'..'۹' }) {
+                PersianTextUtils.toPersianDigits(cleanUser)
+            } else {
+                "۹۸۴۱۲"
+            }
+
+            val session = UserSession(
+                fullName = displayName,
+                personnelCode = pCode,
+                roleTitle = "ممیز ارشد اموال و دارایی‌ها",
+                branchName = selectedBranch,
+                branchCode = StoreBranches.codeForBranch(selectedBranch)
+            )
+            _selectedBranch.value = selectedBranch
+            _userSession.value = session
+            prefs.edit()
+                .putBoolean("is_logged_in", true)
+                .putString("user_full_name", session.fullName)
+                .putString("user_personnel_code", session.personnelCode)
+                .putString("user_role", session.roleTitle)
+                .putString("selected_branch", selectedBranch)
+                .apply()
+
+            _isLoggingIn.value = false
+            _currentScreen.value = AppScreen.HOME_HUB
+            _statusBanner.value = "خوش آمدید، ${session.fullName} • آماده ممیزی «$selectedBranch»"
+        }
+    }
+
+    fun logout() {
+        prefs.edit().putBoolean("is_logged_in", false).apply()
+        _userSession.value = null
+        _activeDiscrepancyAssetId.value = null
+        _highlightedPhotoAssetId.value = null
+        _currentScreen.value = AppScreen.LOGIN
+    }
+
+    fun navigateTo(screen: AppScreen) {
+        _currentScreen.value = screen
+    }
+
+    fun navigateBackToHub() {
+        _activeDiscrepancyAssetId.value = null
+        _highlightedPhotoAssetId.value = null
+        _currentScreen.value = AppScreen.HOME_HUB
+    }
+
     private fun computeStats(assets: List<AssetRecord>): AuditSummaryStats {
         var pending = 0
         var confirmed = 0
@@ -184,6 +315,10 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
     fun selectBranch(branch: String) {
         _selectedBranch.value = branch
         prefs.edit().putString("selected_branch", branch).apply()
+        _userSession.value = _userSession.value?.copy(
+            branchName = branch,
+            branchCode = StoreBranches.codeForBranch(branch)
+        )
         _activeDiscrepancyAssetId.value = null
         _highlightedPhotoAssetId.value = null
     }
@@ -212,10 +347,84 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
         _exportPayload.value = null
     }
 
-    /**
-     * Button A: "تایید" (Confirm - Green):
-     * Selects CONFIRMED and immediately opens/highlights the Mandatory Photo Capture/Upload box.
-     */
+    // Document Upload Actions
+    fun selectDocumentCategory(category: DocumentCategory) {
+        _selectedDocCategory.value = category
+    }
+
+    fun addStagedDocument(
+        title: String,
+        category: DocumentCategory,
+        compressed: CompressedPhotoResult
+    ) {
+        val docTitle = title.trim().ifBlank {
+            "${category.persianTitle} - ${_selectedBranch.value}"
+        }
+        val item = StagedDocument(
+            id = UUID.randomUUID().toString(),
+            title = docTitle,
+            category = category,
+            photoPath = compressed.filePath,
+            fileName = compressed.fileName,
+            sizeKb = compressed.sizeKb
+        )
+        _stagedDocuments.value = _stagedDocuments.value + item
+        _statusBanner.value = "مدرک «${item.title}» آماده ارسال شد."
+    }
+
+    fun removeStagedDocument(id: String) {
+        val target = _stagedDocuments.value.firstOrNull { it.id == id }
+        if (target != null) {
+            ImageCompressor.deletePhotoFileIfExists(target.photoPath)
+            _stagedDocuments.value = _stagedDocuments.value.filterNot { it.id == id }
+        }
+    }
+
+    fun uploadAllStagedDocuments() {
+        val staged = _stagedDocuments.value
+        if (staged.isEmpty()) {
+            _statusBanner.value = "لطفاً ابتدا حداقل یک تصویر مدرک (صورتجلسه، فاکتور یا تصویر کالا) اضافه کنید."
+            return
+        }
+        if (_uploadProgress.value != null) return
+
+        viewModelScope.launch {
+            val branch = _selectedBranch.value
+            val uploader = _userSession.value?.fullName ?: "ممیز ارشد"
+            for (step in 1..10) {
+                _uploadProgress.value = step / 10f
+                delay(90)
+            }
+            val records = staged.map { item ->
+                UploadedDocumentRecord(
+                    id = item.id,
+                    storeBranch = branch,
+                    categoryCode = item.category.code,
+                    categoryTitle = item.category.persianTitle,
+                    title = item.title,
+                    photoPath = item.photoPath,
+                    fileName = item.fileName,
+                    sizeKb = item.sizeKb,
+                    uploadedBy = uploader
+                )
+            }
+            repository.insertUploadedDocuments(records)
+            _stagedDocuments.value = emptyList()
+            _uploadProgress.value = null
+            _statusBanner.value =
+                "${PersianTextUtils.toPersianDigits(records.size)} مستند با موفقیت در پرونده «$branch» بارگذاری و ثبت شد."
+        }
+    }
+
+    fun deleteUploadedDocumentRecord(doc: UploadedDocumentRecord) {
+        viewModelScope.launch {
+            ImageCompressor.deletePhotoFileIfExists(doc.photoPath)
+            repository.deleteUploadedDocument(doc.id)
+            _statusBanner.value = "مستند «${doc.title}» حذف شد."
+        }
+    }
+
+    // Asset Inventory Actions
     fun onConfirmClicked(asset: AssetRecord) {
         viewModelScope.launch {
             val updated = asset.copy(
@@ -233,10 +442,6 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * Button B: "رد / مغایرت" (Reject / Discrepancy - Red):
-     * Selects DISCREPANCY and smoothly expands the inline accordion box.
-     */
     fun onDiscrepancyClicked(asset: AssetRecord) {
         viewModelScope.launch {
             if (asset.status != AssetStatus.DISCREPANCY.code) {
@@ -256,9 +461,6 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
         _activeDiscrepancyAssetId.value = null
     }
 
-    /**
-     * Saves the Discrepancy details after validating that both corrected tag input and photo exist.
-     */
     fun saveDiscrepancyRecord(
         asset: AssetRecord,
         correctedTag1: String,
@@ -291,9 +493,6 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
         return true
     }
 
-    /**
-     * Secondary Action: "موجود نیست" (Not Found / Missing)
-     */
     fun onMarkMissingClicked(asset: AssetRecord) {
         viewModelScope.launch {
             repository.upsertAsset(
@@ -426,25 +625,6 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun saveSampleTemplateToUri(context: Context, targetUri: Uri) {
-        viewModelScope.launch {
-            _isBusy.value = true
-            val branch = _selectedBranch.value
-            ExcelHelper.generateSampleTemplateXlsx(context, branch).onSuccess { sampleFile ->
-                runCatching {
-                    context.contentResolver.openOutputStream(targetUri)?.use { out ->
-                        sampleFile.inputStream().use { input -> input.copyTo(out) }
-                    }
-                }.onSuccess {
-                    _statusBanner.value = "فایل قالب نمونه اکسل (.xlsx) با موفقیت ذخیره شد."
-                }.onFailure {
-                    _statusBanner.value = "خطا در ذخیره فایل قالب: ${it.message}"
-                }
-            }
-            _isBusy.value = false
-        }
-    }
-
     fun resetCurrentBranchSampleData() {
         viewModelScope.launch {
             val branch = _selectedBranch.value
@@ -455,11 +635,6 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * Final Submission & Excel Export with strict validation:
-     * If any row is still PENDING, or if any CONFIRMED / DISCREPANCY / SURPLUS row lacks a photo,
-     * block final submission and show a clear Persian alert listing how many items still need attention.
-     */
     fun validateAndFinalizeExport(context: Context) {
         val currentAssets = branchAssets.value
         val stats = summaryStats.value

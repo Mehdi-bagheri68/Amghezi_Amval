@@ -2,13 +2,17 @@ package com.example
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -58,6 +62,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.model.AppScreen
 import com.example.model.AuditFilterTab
 import com.example.model.AuditSummaryStats
 import com.example.model.PersianTextUtils
@@ -67,18 +72,23 @@ import com.example.ui.components.ExcelExportReadyDialog
 import com.example.ui.components.HeaderStats
 import com.example.ui.components.SurplusModal
 import com.example.ui.components.ValidationBlockDialog
+import com.example.ui.screens.DocumentUploadScreen
+import com.example.ui.screens.HomeHubScreen
+import com.example.ui.screens.LoginScreen
 import com.example.ui.theme.EmeraldConfirm
 import com.example.ui.theme.IndigoAccent
 import com.example.ui.theme.IndigoContainer
 import com.example.ui.theme.IndigoOnContainer
 import com.example.ui.theme.IndigoPrimary
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.theme.NavyDeep
 import com.example.ui.theme.SlateBackground
 import com.example.ui.theme.SlateBorder
 import com.example.ui.theme.SlateSurface
 import com.example.ui.theme.SlateTextMuted
 import com.example.ui.theme.SlateTextPrimary
 import com.example.ui.theme.SlateTextSecondary
+import com.example.ui.theme.TealVibrant
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -96,6 +106,86 @@ class MainActivity : ComponentActivity() {
 fun RetailAssetAuditApp(
     auditViewModel: AuditViewModel = viewModel()
 ) {
+    val currentScreen by auditViewModel.currentScreen.collectAsStateWithLifecycle()
+    val userSession by auditViewModel.userSession.collectAsStateWithLifecycle()
+    val isLoggingIn by auditViewModel.isLoggingIn.collectAsStateWithLifecycle()
+    val loginError by auditViewModel.loginError.collectAsStateWithLifecycle()
+    val selectedBranch by auditViewModel.selectedBranch.collectAsStateWithLifecycle()
+    val stats by auditViewModel.summaryStats.collectAsStateWithLifecycle()
+    val uploadedDocs by auditViewModel.branchUploadedDocuments.collectAsStateWithLifecycle()
+    val selectedDocCategory by auditViewModel.selectedDocCategory.collectAsStateWithLifecycle()
+    val stagedDocs by auditViewModel.stagedDocuments.collectAsStateWithLifecycle()
+    val uploadProgress by auditViewModel.uploadProgress.collectAsStateWithLifecycle()
+
+    AnimatedContent(
+        targetState = currentScreen,
+        transitionSpec = { fadeIn() togetherWith fadeOut() },
+        label = "screenNavigation"
+    ) { screen ->
+        when (screen) {
+            AppScreen.LOGIN -> {
+                LoginScreen(
+                    initialBranch = selectedBranch,
+                    isLoggingIn = isLoggingIn,
+                    errorMessage = loginError,
+                    onClearError = auditViewModel::clearLoginError,
+                    onLoginSubmit = { username, password, branch ->
+                        auditViewModel.performLogin(username, password, branch)
+                    }
+                )
+            }
+
+            AppScreen.HOME_HUB -> {
+                HomeHubScreen(
+                    userSession = userSession,
+                    selectedBranch = selectedBranch,
+                    stats = stats,
+                    uploadedDocsCount = uploadedDocs.size,
+                    onBranchSelected = auditViewModel::selectBranch,
+                    onNavigateToAssetInventory = {
+                        auditViewModel.navigateTo(AppScreen.ASSET_INVENTORY)
+                    },
+                    onNavigateToDocumentUpload = {
+                        auditViewModel.navigateTo(AppScreen.DOCUMENT_UPLOAD)
+                    },
+                    onLogoutClicked = auditViewModel::logout
+                )
+            }
+
+            AppScreen.ASSET_INVENTORY -> {
+                AssetInventoryScreen(
+                    auditViewModel = auditViewModel,
+                    onBackToHub = auditViewModel::navigateBackToHub
+                )
+            }
+
+            AppScreen.DOCUMENT_UPLOAD -> {
+                DocumentUploadScreen(
+                    storeBranch = selectedBranch,
+                    auditorName = userSession?.fullName ?: "مهندس علی باقری",
+                    selectedCategory = selectedDocCategory,
+                    stagedDocuments = stagedDocs,
+                    uploadedDocuments = uploadedDocs,
+                    uploadProgress = uploadProgress,
+                    onSelectCategory = auditViewModel::selectDocumentCategory,
+                    onAddStagedDocument = auditViewModel::addStagedDocument,
+                    onRemoveStagedDocument = auditViewModel::removeStagedDocument,
+                    onUploadAllStaged = auditViewModel::uploadAllStagedDocuments,
+                    onDeleteUploadedRecord = auditViewModel::deleteUploadedDocumentRecord,
+                    onBackToHub = auditViewModel::navigateBackToHub
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AssetInventoryScreen(
+    auditViewModel: AuditViewModel,
+    onBackToHub: () -> Unit
+) {
+    BackHandler { onBackToHub() }
+
     val context = LocalContext.current
     val selectedBranch by auditViewModel.selectedBranch.collectAsStateWithLifecycle()
     val searchQuery by auditViewModel.searchQuery.collectAsStateWithLifecycle()
@@ -110,7 +200,6 @@ fun RetailAssetAuditApp(
     val statusBanner by auditViewModel.statusBanner.collectAsStateWithLifecycle()
     val isBusy by auditViewModel.isBusy.collectAsStateWithLifecycle()
 
-    // Launcher for importing Excel (.xlsx) or CSV files
     val excelImportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -123,7 +212,6 @@ fun RetailAssetAuditApp(
         }
     }
 
-    // Launcher for saving the final exported .xlsx report to user-selected device storage
     val saveExportXlsxLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -146,6 +234,7 @@ fun RetailAssetAuditApp(
                     searchQuery = searchQuery,
                     selectedFilter = selectedFilter,
                     stats = stats,
+                    onBackToHubClicked = onBackToHub,
                     onBranchSelected = auditViewModel::selectBranch,
                     onSearchQueryChanged = auditViewModel::updateSearchQuery,
                     onFilterSelected = auditViewModel::selectFilter,
@@ -168,7 +257,7 @@ fun RetailAssetAuditApp(
                 if (isBusy) {
                     LinearProgressIndicator(
                         modifier = Modifier.fillMaxWidth(),
-                        color = IndigoAccent
+                        color = TealVibrant
                     )
                 }
             }
@@ -194,11 +283,10 @@ fun RetailAssetAuditApp(
                     .widthIn(max = 1100.dp)
                     .align(Alignment.TopCenter)
             ) {
-                // Interactive Status Banner
                 AnimatedVisibility(visible = !statusBanner.isNullOrBlank()) {
                     Surface(
                         color = IndigoContainer,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         border = BorderStroke(1.dp, IndigoAccent.copy(alpha = 0.35f)),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -245,7 +333,6 @@ fun RetailAssetAuditApp(
                     }
                 }
 
-                // Desktop Table Header when in wide screen mode
                 if (isDesktopTableMode && filteredAssets.isNotEmpty()) {
                     DesktopTableHeaderBanner()
                 }
@@ -303,7 +390,6 @@ fun RetailAssetAuditApp(
         }
     }
 
-    // Add Surplus Asset Modal
     if (showSurplusModal) {
         SurplusModal(
             storeBranch = selectedBranch,
@@ -322,7 +408,6 @@ fun RetailAssetAuditApp(
         )
     }
 
-    // Strict Validation Block Alert Dialog
     validationAlert?.let { alert ->
         ValidationBlockDialog(
             alert = alert,
@@ -333,7 +418,6 @@ fun RetailAssetAuditApp(
         )
     }
 
-    // Excel Export Ready Preview & Download Dialog
     exportPayload?.let { payload ->
         ExcelExportReadyDialog(
             payload = payload,
@@ -351,7 +435,7 @@ private fun DesktopTableHeaderBanner() {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 4.dp),
-        color = IndigoPrimary,
+        color = NavyDeep,
         shape = RoundedCornerShape(12.dp)
     ) {
         Row(
@@ -412,7 +496,6 @@ private fun BottomStickyAuditBar(
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Progress indicator line
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -433,7 +516,7 @@ private fun BottomStickyAuditBar(
                     },
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = if (stats.isReadyForFinalExport) EmeraldConfirm else IndigoAccent
+                    color = if (stats.isReadyForFinalExport) EmeraldConfirm else TealVibrant
                 )
             }
 
@@ -442,16 +525,15 @@ private fun BottomStickyAuditBar(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Prominent "+ افزودن کالای مازاد در فروشگاه" button (matching screenshot)
                 Button(
                     onClick = onAddSurplusClicked,
                     modifier = Modifier
                         .weight(1.1f)
-                        .height(50.dp)
+                        .height(54.dp)
                         .testTag("add_surplus_sticky_btn"),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = IndigoPrimary,
+                        containerColor = NavyDeep,
                         contentColor = Color.White
                     )
                 ) {
@@ -468,16 +550,15 @@ private fun BottomStickyAuditBar(
                     )
                 }
 
-                // "تایید نهایی و خروجی اکسل" button
                 Button(
                     onClick = onFinalizeExportClicked,
                     modifier = Modifier
                         .weight(1.25f)
-                        .height(50.dp)
+                        .height(54.dp)
                         .testTag("finalize_export_sticky_btn"),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (stats.isReadyForFinalExport) EmeraldConfirm else IndigoAccent,
+                        containerColor = if (stats.isReadyForFinalExport) EmeraldConfirm else TealVibrant,
                         contentColor = Color.White
                     )
                 ) {
@@ -539,8 +620,8 @@ private fun EmptyAuditListPlaceholder(
             )
             Button(
                 onClick = onClearFilters,
-                shape = RoundedCornerShape(10.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = IndigoAccent)
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = TealVibrant)
             ) {
                 Text(
                     text = "نمایش همه دارایی‌ها",

@@ -85,7 +85,6 @@ object ImageCompressor {
     /**
      * Generates a realistic 1024x720 asset & barcode tag audit photo on HTML5-equivalent Android Canvas
      * and runs it through the exact same max-width 1024px, JPEG 0.7 compression pipeline.
-     * Ideal for instant testing in browser emulators or quick field verification.
      */
     suspend fun generateQuickCameraAuditPhoto(
         context: Context,
@@ -100,15 +99,13 @@ object ImageCompressor {
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
 
-            // Studio metallic/slate background
             val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.parseColor("#1E293B")
+                color = Color.parseColor("#0F172A")
             }
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
-            // Subtle grid lines
             val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.parseColor("#334155")
+                color = Color.parseColor("#1E293B")
                 strokeWidth = 2f
             }
             for (x in 0..width step 64) {
@@ -118,17 +115,15 @@ object ImageCompressor {
                 canvas.drawLine(0f, y.toFloat(), width.toFloat(), y.toFloat(), gridPaint)
             }
 
-            // Outer metallic asset plaque card
             val cardRect = RectF(90f, 90f, width - 90f, height - 90f)
             val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.parseColor("#F8FAFC")
             }
             canvas.drawRoundRect(cardRect, 28f, 28f, cardPaint)
 
-            // Top emerald/indigo header band inside plaque
             val headerRect = RectF(90f, 90f, width - 90f, 195f)
             val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.parseColor("#0F172A")
+                color = Color.parseColor("#0D9488")
             }
             canvas.drawRoundRect(headerRect, 28f, 28f, headerPaint)
             canvas.drawRect(90f, 150f, width - 90f, 195f, headerPaint)
@@ -146,7 +141,6 @@ object ImageCompressor {
                 titlePaint
             )
 
-            // Asset description & card code
             val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.parseColor("#0F172A")
                 textSize = 30f
@@ -172,7 +166,6 @@ object ImageCompressor {
                 subPaint
             )
 
-            // Barcode stripes simulation
             val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.parseColor("#0F172A")
             }
@@ -194,9 +187,8 @@ object ImageCompressor {
                 idx++
             }
 
-            // Asset Tag number box
             val tagPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.parseColor("#059669")
+                color = Color.parseColor("#0D9488")
                 textSize = 36f
                 typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
                 textAlign = Paint.Align.CENTER
@@ -204,7 +196,6 @@ object ImageCompressor {
             val displayTag = assetTag.ifBlank { "بدون کد" }
             canvas.drawText("ASSET TAG: $displayTag", width / 2f, 530f, tagPaint)
 
-            // Timestamp footer
             val timeStr = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
             val footerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.parseColor("#64748B")
@@ -217,12 +208,107 @@ object ImageCompressor {
         }
     }
 
+    /**
+     * Generates a realistic scanned official document (صورتجلسه / فاکتور / تصویر کالا)
+     * for quick testing on the Document Upload screen.
+     */
+    suspend fun generateQuickDocumentScanPhoto(
+        context: Context,
+        categoryTitle: String,
+        documentTitle: String,
+        storeBranch: String,
+        auditorName: String
+    ): Result<CompressedPhotoResult> = withContext(Dispatchers.IO) {
+        runCatching {
+            val width = 1024
+            val height = 768
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+
+            // Desk surface
+            val deskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#1E293B")
+            }
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), deskPaint)
+
+            // Paper sheet
+            val paperRect = RectF(110f, 60f, width - 110f, height - 60f)
+            val paperPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#FFFFFF")
+            }
+            canvas.drawRoundRect(paperRect, 18f, 18f, paperPaint)
+
+            // Header bar on paper
+            val headerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#1E3A8A")
+            }
+            canvas.drawRoundRect(RectF(110f, 60f, width - 110f, 170f), 18f, 18f, headerPaint)
+            canvas.drawRect(110f, 130f, width - 110f, 170f, headerPaint)
+
+            val headerTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                textSize = 30f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText("سند رسمی اموال‌گردانی • $categoryTitle", width / 2f, 128f, headerTextPaint)
+
+            val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#0F172A")
+                textSize = 28f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText(documentTitle.ifBlank { "$categoryTitle - $storeBranch" }, width / 2f, 240f, titlePaint)
+
+            val infoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#334155")
+                textSize = 22f
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText("واحد سازمانی: $storeBranch   |   ممیز ثبت‌کننده: $auditorName", width / 2f, 295f, infoPaint)
+
+            // Simulated document lines
+            val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#CBD5E1")
+                strokeWidth = 6f
+            }
+            for (y in 350..540 step 38) {
+                canvas.drawLine(180f, y.toFloat(), width - 180f, y.toFloat(), linePaint)
+            }
+
+            // Official Stamp badge
+            val stampPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#0D9488")
+                style = Paint.Style.STROKE
+                strokeWidth = 5f
+            }
+            canvas.drawCircle(260f, 610f, 52f, stampPaint)
+            val stampTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#0D9488")
+                textSize = 18f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText("تایید ممیزی", 260f, 616f, stampTextPaint)
+
+            val timeStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
+            val footerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.parseColor("#64748B")
+                textSize = 19f
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText("Document Scan • $timeStr • 1024px JPEG 0.7", width / 2f, 665f, footerPaint)
+
+            compressAndPersistBitmap(context, bitmap, "DOC_${categoryTitle.hashCode()}")
+        }
+    }
+
     private fun compressAndPersistBitmap(
         context: Context,
         sourceBitmap: Bitmap,
         assetCodePrefix: String
     ): CompressedPhotoResult {
-        // Scale down using Canvas if width > 1024px
         val targetWidth: Int
         val targetHeight: Int
         if (sourceBitmap.width > MAX_WIDTH) {

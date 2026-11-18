@@ -2,17 +2,29 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Primary Slate & Indigo Palette
-val SlateBackground = Color(0xFFF1F5F9)
+// Corporate High-Contrast Palette for Field Work
+val NavyDeep = Color(0xFF0F172A)
+val NavyPrimary = Color(0xFF1E3A8A)
+val NavySurface = Color(0xFF1E293B)
+val NavyLightContainer = Color(0xFFE0E7FF)
+
+// Vibrant Teal / Emerald for "اموال‌گردانی"
+val TealVibrant = Color(0xFF0D9488)
+val TealDark = Color(0xFF0F766E)
+val TealContainer = Color(0xFFCCFBF1)
+val TealBorder = Color(0xFF5EEAD4)
+
+// Soft Off-White / Cool Gray Background & Pure White Cards
+val SlateBackground = Color(0xFFF8FAFC)
 val SlateSurface = Color(0xFFFFFFFF)
-val SlateSurfaceVariant = Color(0xFFF8FAFC)
+val SlateSurfaceVariant = Color(0xFFF1F5F9)
 val SlateBorder = Color(0xFFE2E8F0)
 val SlateTextPrimary = Color(0xFF0F172A)
 val SlateTextSecondary = Color(0xFF475569)
 val SlateTextMuted = Color(0xFF64748B)
 
-// Primary Brand / Sticky Action Bar (Deep Navy / Indigo)
-val IndigoPrimary = Color(0xFF334155)
+// Primary Brand / Royal Indigo for "بارگذاری مستندات" & Actions
+val IndigoPrimary = Color(0xFF1E3A8A)
 val IndigoAccent = Color(0xFF4F46E5)
 val IndigoContainer = Color(0xFFEEF2FF)
 val IndigoOnContainer = Color(0xFF312E81)

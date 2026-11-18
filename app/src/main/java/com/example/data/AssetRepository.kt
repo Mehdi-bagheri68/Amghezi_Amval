@@ -3,6 +3,7 @@ package com.example.data
 import com.example.model.AssetRecord
 import com.example.model.AssetStatus
 import com.example.model.StoreBranches
+import com.example.model.UploadedDocumentRecord
 import kotlinx.coroutines.flow.Flow
 
 class AssetRepository(private val assetDao: AssetDao) {
@@ -11,6 +12,9 @@ class AssetRepository(private val assetDao: AssetDao) {
 
     fun observeAssetsForBranch(branch: String): Flow<List<AssetRecord>> =
         assetDao.observeAssetsByBranch(branch)
+
+    fun observeDocumentsForBranch(branch: String): Flow<List<UploadedDocumentRecord>> =
+        assetDao.observeDocumentsByBranch(branch)
 
     suspend fun ensureSeededForBranches() {
         for ((index, branch) in StoreBranches.ALL_BRANCHES.withIndex()) {
@@ -44,6 +48,14 @@ class AssetRepository(private val assetDao: AssetDao) {
 
     suspend fun deleteAsset(id: String) {
         assetDao.deleteById(id)
+    }
+
+    suspend fun insertUploadedDocuments(docs: List<UploadedDocumentRecord>) {
+        assetDao.insertUploadedDocuments(docs)
+    }
+
+    suspend fun deleteUploadedDocument(id: String) {
+        assetDao.deleteUploadedDocumentById(id)
     }
 
     companion object {

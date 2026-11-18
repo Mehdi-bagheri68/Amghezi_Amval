@@ -10,6 +10,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Update
 import com.example.model.AssetRecord
+import com.example.model.UploadedDocumentRecord
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -40,9 +41,23 @@ interface AssetDao {
 
     @Query("DELETE FROM asset_records WHERE storeBranch = :branch")
     suspend fun deleteBranchAssets(branch: String)
+
+    // Uploaded Documents Queries
+    @Query("SELECT * FROM uploaded_documents WHERE storeBranch = :branch ORDER BY uploadedAt DESC")
+    fun observeDocumentsByBranch(branch: String): Flow<List<UploadedDocumentRecord>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertUploadedDocuments(docs: List<UploadedDocumentRecord>)
+
+    @Query("DELETE FROM uploaded_documents WHERE id = :id")
+    suspend fun deleteUploadedDocumentById(id: String)
 }
 
-@Database(entities = [AssetRecord::class], version = 1, exportSchema = false)
+@Database(
+    entities = [AssetRecord::class, UploadedDocumentRecord::class],
+    version = 2,
+    exportSchema = false
+)
 abstract class AssetDatabase : RoomDatabase() {
     abstract fun assetDao(): AssetDao
 
