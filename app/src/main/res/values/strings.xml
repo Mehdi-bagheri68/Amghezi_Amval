@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">اموال‌گردانی فروشگاه</string>
+    <string name="header_title">سامانه اموال‌گردانی فروشگاه‌های زنجیره‌ای</string>
+    <string name="header_subtitle">ممیزی، ثبت مغایرت و مستندسازی تصویری دارایی‌ها</string>
+    <string name="store_selector_label">انتخاب فروشگاه:</string>
+    <string name="search_placeholder">جستجوی شرح کالا، شماره اموال، کارت دارایی یا بچ...</string>
+    <string name="filter_all">همه</string>
+    <string name="filter_pending">در انتظار بررسی</string>
+    <string name="filter_confirmed">تایید شده</string>
+    <string name="filter_discrepancy">مغایرت</string>
+    <string name="filter_surplus">مازاد</string>
+    <string name="filter_missing">موجود نیست</string>
+    <string name="btn_confirm">تایید</string>
+    <string name="btn_discrepancy">رد / مغایرت</string>
+    <string name="btn_missing">موجود نیست</string>
+    <string name="btn_add_surplus">+ افزودن کالای مازاد در فروشگاه</string>
+    <string name="btn_finalize_export">تایید نهایی و خروجی اکسل</string>
+    <string name="btn_import_excel">ورود اکسل (.xlsx)</string>
+    <string name="btn_sample_excel">دانلود قالب اکسل</string>
+    <string name="badge_photo_mandatory">عکس اجباری است</string>
+    <string name="badge_surplus">کالای مازاد</string>
+    <string name="quick_none">ندارد</string>
+    <string name="quick_illegible">ناخوانا</string>
+    <string name="save_discrepancy">ثبت مغایرت</string>
+    <string name="cancel">انصراف</string>
+</resources>

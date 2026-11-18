@@ -1,0 +1,10 @@
+{
+  "name": "اموال‌گردانی فروشگاه",
+  "description": "سامانه هوشمند اموال‌گردانی و ممیزی دارایی‌های فروشگاه‌های زنجیره‌ای با پشتیبانی از ورود و خروج اکسل (.xlsx) و ثبت تصاویر دارایی",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
