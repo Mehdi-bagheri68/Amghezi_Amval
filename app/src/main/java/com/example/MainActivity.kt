@@ -2,7 +2,6 @@ package com.example
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -36,9 +35,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material3.Button
@@ -68,18 +67,17 @@ import com.example.model.AuditSummaryStats
 import com.example.model.PersianTextUtils
 import com.example.ui.AuditViewModel
 import com.example.ui.components.AssetRowCard
+import com.example.ui.components.AuditReportDashboardSection
+import com.example.ui.components.CompactAuditTopBar
 import com.example.ui.components.ExcelExportReadyDialog
-import com.example.ui.components.HeaderStats
 import com.example.ui.components.SurplusModal
 import com.example.ui.components.ValidationBlockDialog
-import com.example.ui.screens.DocumentUploadScreen
-import com.example.ui.screens.HomeHubScreen
 import com.example.ui.screens.LoginScreen
+import com.example.ui.theme.AmberSurplus
 import com.example.ui.theme.EmeraldConfirm
 import com.example.ui.theme.IndigoAccent
 import com.example.ui.theme.IndigoContainer
 import com.example.ui.theme.IndigoOnContainer
-import com.example.ui.theme.IndigoPrimary
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.NavyDeep
 import com.example.ui.theme.SlateBackground
@@ -107,15 +105,9 @@ fun RetailAssetAuditApp(
     auditViewModel: AuditViewModel = viewModel()
 ) {
     val currentScreen by auditViewModel.currentScreen.collectAsStateWithLifecycle()
-    val userSession by auditViewModel.userSession.collectAsStateWithLifecycle()
     val isLoggingIn by auditViewModel.isLoggingIn.collectAsStateWithLifecycle()
     val loginError by auditViewModel.loginError.collectAsStateWithLifecycle()
     val selectedBranch by auditViewModel.selectedBranch.collectAsStateWithLifecycle()
-    val stats by auditViewModel.summaryStats.collectAsStateWithLifecycle()
-    val uploadedDocs by auditViewModel.branchUploadedDocuments.collectAsStateWithLifecycle()
-    val selectedDocCategory by auditViewModel.selectedDocCategory.collectAsStateWithLifecycle()
-    val stagedDocs by auditViewModel.stagedDocuments.collectAsStateWithLifecycle()
-    val uploadProgress by auditViewModel.uploadProgress.collectAsStateWithLifecycle()
 
     AnimatedContent(
         targetState = currentScreen,
@@ -135,45 +127,8 @@ fun RetailAssetAuditApp(
                 )
             }
 
-            AppScreen.HOME_HUB -> {
-                HomeHubScreen(
-                    userSession = userSession,
-                    selectedBranch = selectedBranch,
-                    stats = stats,
-                    uploadedDocsCount = uploadedDocs.size,
-                    onBranchSelected = auditViewModel::selectBranch,
-                    onNavigateToAssetInventory = {
-                        auditViewModel.navigateTo(AppScreen.ASSET_INVENTORY)
-                    },
-                    onNavigateToDocumentUpload = {
-                        auditViewModel.navigateTo(AppScreen.DOCUMENT_UPLOAD)
-                    },
-                    onLogoutClicked = auditViewModel::logout
-                )
-            }
-
             AppScreen.ASSET_INVENTORY -> {
-                AssetInventoryScreen(
-                    auditViewModel = auditViewModel,
-                    onBackToHub = auditViewModel::navigateBackToHub
-                )
-            }
-
-            AppScreen.DOCUMENT_UPLOAD -> {
-                DocumentUploadScreen(
-                    storeBranch = selectedBranch,
-                    auditorName = userSession?.fullName ?: "مهندس علی باقری",
-                    selectedCategory = selectedDocCategory,
-                    stagedDocuments = stagedDocs,
-                    uploadedDocuments = uploadedDocs,
-                    uploadProgress = uploadProgress,
-                    onSelectCategory = auditViewModel::selectDocumentCategory,
-                    onAddStagedDocument = auditViewModel::addStagedDocument,
-                    onRemoveStagedDocument = auditViewModel::removeStagedDocument,
-                    onUploadAllStaged = auditViewModel::uploadAllStagedDocuments,
-                    onDeleteUploadedRecord = auditViewModel::deleteUploadedDocumentRecord,
-                    onBackToHub = auditViewModel::navigateBackToHub
-                )
+                AssetInventoryScreen(auditViewModel = auditViewModel)
             }
         }
     }
@@ -181,19 +136,17 @@ fun RetailAssetAuditApp(
 
 @Composable
 fun AssetInventoryScreen(
-    auditViewModel: AuditViewModel,
-    onBackToHub: () -> Unit
+    auditViewModel: AuditViewModel
 ) {
-    BackHandler { onBackToHub() }
-
     val context = LocalContext.current
+    val userSession by auditViewModel.userSession.collectAsStateWithLifecycle()
     val selectedBranch by auditViewModel.selectedBranch.collectAsStateWithLifecycle()
     val searchQuery by auditViewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedFilter by auditViewModel.selectedFilter.collectAsStateWithLifecycle()
     val filteredAssets by auditViewModel.filteredAssets.collectAsStateWithLifecycle()
     val stats by auditViewModel.summaryStats.collectAsStateWithLifecycle()
     val activeDiscrepancyId by auditViewModel.activeDiscrepancyAssetId.collectAsStateWithLifecycle()
-    val highlightedPhotoId by auditViewModel.highlightedPhotoAssetId.collectAsStateWithLifecycle()
+    val expandedPhotoId by auditViewModel.expandedPhotoAssetId.collectAsStateWithLifecycle()
     val showSurplusModal by auditViewModel.showSurplusModal.collectAsStateWithLifecycle()
     val validationAlert by auditViewModel.validationBlockAlert.collectAsStateWithLifecycle()
     val exportPayload by auditViewModel.exportPayload.collectAsStateWithLifecycle()
@@ -229,15 +182,10 @@ fun AssetInventoryScreen(
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             Column(modifier = Modifier.fillMaxWidth()) {
-                HeaderStats(
+                CompactAuditTopBar(
+                    userSession = userSession,
                     selectedBranch = selectedBranch,
-                    searchQuery = searchQuery,
-                    selectedFilter = selectedFilter,
-                    stats = stats,
-                    onBackToHubClicked = onBackToHub,
                     onBranchSelected = auditViewModel::selectBranch,
-                    onSearchQueryChanged = auditViewModel::updateSearchQuery,
-                    onFilterSelected = auditViewModel::selectFilter,
                     onImportExcelClicked = {
                         excelImportLauncher.launch(
                             arrayOf(
@@ -252,7 +200,8 @@ fun AssetInventoryScreen(
                     onLoadSampleExcelClicked = {
                         auditViewModel.importSampleExcelTemplateDirectly(context)
                     },
-                    onResetBranchClicked = auditViewModel::resetCurrentBranchSampleData
+                    onResetBranchClicked = auditViewModel::resetCurrentBranchSampleData,
+                    onLogoutClicked = auditViewModel::logout
                 )
                 if (isBusy) {
                     LinearProgressIndicator(
@@ -263,7 +212,7 @@ fun AssetInventoryScreen(
             }
         },
         bottomBar = {
-            BottomStickyAuditBar(
+            CompactBottomStickyBar(
                 stats = stats,
                 onAddSurplusClicked = { auditViewModel.setSurplusModalVisible(true) },
                 onFinalizeExportClicked = { auditViewModel.validateAndFinalizeExport(context) }
@@ -277,113 +226,126 @@ fun AssetInventoryScreen(
         ) {
             val isDesktopTableMode = maxWidth >= 760.dp
 
-            Column(
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .widthIn(max = 1100.dp)
                     .align(Alignment.TopCenter)
+                    .testTag("asset_audit_list"),
+                contentPadding = PaddingValues(
+                    start = 10.dp,
+                    end = 10.dp,
+                    top = 8.dp,
+                    bottom = 16.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                AnimatedVisibility(visible = !statusBanner.isNullOrBlank()) {
-                    Surface(
-                        color = IndigoContainer,
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, IndigoAccent.copy(alpha = 0.35f)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                // Scrollable High-Contrast Live Report Dashboard & Compact Search Bar
+                item(key = "report_dashboard_header") {
+                    AuditReportDashboardSection(
+                        searchQuery = searchQuery,
+                        selectedFilter = selectedFilter,
+                        stats = stats,
+                        onSearchQueryChanged = auditViewModel::updateSearchQuery,
+                        onFilterSelected = auditViewModel::selectFilter
+                    )
+                }
+
+                // Dismissible Status Notification Banner
+                if (!statusBanner.isNullOrBlank()) {
+                    item(key = "status_banner") {
+                        Surface(
+                            color = IndigoContainer,
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, IndigoAccent.copy(alpha = 0.35f)),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = null,
-                                    tint = IndigoAccent,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Text(
-                                    text = statusBanner.orEmpty(),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Medium,
-                                    color = IndigoOnContainer
-                                )
-                            }
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = IndigoAccent,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = statusBanner.orEmpty(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = IndigoOnContainer
+                                    )
+                                }
 
-                            IconButton(
-                                onClick = auditViewModel::dismissBanner,
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "بستن پیام",
-                                    tint = IndigoOnContainer,
-                                    modifier = Modifier.size(16.dp)
-                                )
+                                IconButton(
+                                    onClick = auditViewModel::dismissBanner,
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "بستن پیام",
+                                        tint = IndigoOnContainer,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
+                // Desktop Table Header Row
                 if (isDesktopTableMode && filteredAssets.isNotEmpty()) {
-                    DesktopTableHeaderBanner()
+                    item(key = "desktop_table_header") {
+                        DesktopTableHeaderBanner()
+                    }
                 }
 
                 if (filteredAssets.isEmpty()) {
-                    EmptyAuditListPlaceholder(
-                        selectedFilter = selectedFilter,
-                        searchQuery = searchQuery,
-                        onClearFilters = {
-                            auditViewModel.updateSearchQuery("")
-                            auditViewModel.selectFilter(AuditFilterTab.ALL)
-                        }
-                    )
+                    item(key = "empty_placeholder") {
+                        EmptyAuditListPlaceholder(
+                            selectedFilter = selectedFilter,
+                            searchQuery = searchQuery,
+                            onClearFilters = {
+                                auditViewModel.updateSearchQuery("")
+                                auditViewModel.selectFilter(AuditFilterTab.ALL)
+                            }
+                        )
+                    }
                 } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .testTag("asset_audit_list"),
-                        contentPadding = PaddingValues(
-                            start = 14.dp,
-                            end = 14.dp,
-                            top = 10.dp,
-                            bottom = 24.dp
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        itemsIndexed(
-                            items = filteredAssets,
-                            key = { _, item -> item.id }
-                        ) { idx, asset ->
-                            AssetRowCard(
-                                index = idx,
-                                asset = asset,
-                                isDiscrepancyAccordionOpen = activeDiscrepancyId == asset.id,
-                                isPhotoBoxHighlighted = highlightedPhotoId == asset.id,
-                                isDesktopTableMode = isDesktopTableMode,
-                                onConfirmClicked = { auditViewModel.onConfirmClicked(asset) },
-                                onDiscrepancyClicked = { auditViewModel.onDiscrepancyClicked(asset) },
-                                onMarkMissingClicked = { auditViewModel.onMarkMissingClicked(asset) },
-                                onSaveDiscrepancy = { tag1, tag2, tag3 ->
-                                    auditViewModel.saveDiscrepancyRecord(asset, tag1, tag2, tag3)
-                                },
-                                onCloseDiscrepancy = auditViewModel::closeDiscrepancyAccordion,
-                                onPhotoCompressed = { result ->
-                                    auditViewModel.attachCompressedPhoto(asset, result)
-                                },
-                                onPhotoDeleted = {
-                                    auditViewModel.deleteAssetPhoto(asset)
-                                }
-                            )
-                        }
+                    itemsIndexed(
+                        items = filteredAssets,
+                        key = { _, item -> item.id }
+                    ) { idx, asset ->
+                        AssetRowCard(
+                            index = idx,
+                            asset = asset,
+                            isDiscrepancyAccordionOpen = activeDiscrepancyId == asset.id,
+                            isPhotoBoxExpanded = expandedPhotoId == asset.id,
+                            isDesktopTableMode = isDesktopTableMode,
+                            onConfirmClicked = { auditViewModel.onConfirmClicked(asset) },
+                            onDiscrepancyClicked = { auditViewModel.onDiscrepancyClicked(asset) },
+                            onMarkMissingClicked = { auditViewModel.onMarkMissingClicked(asset) },
+                            onTogglePhotoBox = { auditViewModel.togglePhotoBoxExpanded(asset.id) },
+                            onSaveDiscrepancy = { tag1, tag2, tag3 ->
+                                auditViewModel.saveDiscrepancyRecord(asset, tag1, tag2, tag3)
+                            },
+                            onCloseDiscrepancy = auditViewModel::closeDiscrepancyAccordion,
+                            onPhotoCompressed = { result ->
+                                auditViewModel.attachCompressedPhoto(asset, result)
+                            },
+                            onPhotoDeleted = {
+                                auditViewModel.deleteAssetPhoto(asset)
+                            }
+                        )
                     }
                 }
             }
@@ -421,6 +383,7 @@ fun AssetInventoryScreen(
     exportPayload?.let { payload ->
         ExcelExportReadyDialog(
             payload = payload,
+            stats = stats,
             onSaveToDeviceClicked = {
                 saveExportXlsxLauncher.launch(payload.fileName)
             },
@@ -432,43 +395,41 @@ fun AssetInventoryScreen(
 @Composable
 private fun DesktopTableHeaderBanner() {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth(),
         color = NavyDeep,
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(10.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
                 text = "شرح کارت دارایی و وضعیت",
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 modifier = Modifier.weight(2.2f)
             )
             Text(
                 text = "شماره اموال ۱ / ۲ / ۳",
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
-                modifier = Modifier.weight(1.8f)
+                modifier = Modifier.weight(1.7f)
             )
             Text(
-                text = "کارت دارایی و بچ",
-                style = MaterialTheme.typography.labelMedium,
+                text = "کارت و بچ",
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
-                modifier = Modifier.weight(1.1f)
+                modifier = Modifier.weight(1f)
             )
             Text(
                 text = "عملیات ممیزی",
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 modifier = Modifier.weight(2.1f)
@@ -477,8 +438,13 @@ private fun DesktopTableHeaderBanner() {
     }
 }
 
+/**
+ * Ultra-slim single-row bottom action bar (~64dp) with unmistakable semantic colors:
+ * - Warm Amber (#D97706) for "+ کالای مازاد"
+ * - Royal Indigo (#4338CA) / Emerald (#059669) for "گزارش نهایی و اکسل"
+ */
 @Composable
-private fun BottomStickyAuditBar(
+private fun CompactBottomStickyBar(
     stats: AuditSummaryStats,
     onAddSurplusClicked: () -> Unit,
     onFinalizeExportClicked: () -> Unit
@@ -486,94 +452,73 @@ private fun BottomStickyAuditBar(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = SlateSurface,
-        shadowElevation = 10.dp,
+        shadowElevation = 8.dp,
         border = BorderStroke(1.dp, SlateBorder)
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+            // Distinct Amber Button for Surplus Asset
+            Button(
+                onClick = onAddSurplusClicked,
+                modifier = Modifier
+                    .weight(0.95f)
+                    .height(48.dp)
+                    .testTag("add_surplus_sticky_btn"),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AmberSurplus,
+                    contentColor = Color.White
+                ),
+                contentPadding = PaddingValues(horizontal = 10.dp)
             ) {
-                Text(
-                    text = "پیشرفت ممیزی شعبه: ${PersianTextUtils.toPersianDigits(stats.completedCount)} از ${PersianTextUtils.toPersianDigits(stats.totalCount)} قلم تکمیل شده",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = SlateTextSecondary
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
                 )
-
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = if (stats.isReadyForFinalExport) {
-                        "آماده خروجی اکسل ✓"
-                    } else {
-                        "${PersianTextUtils.toPersianDigits(stats.pendingCount + stats.missingPhotoCount)} مورد نیازمند تکمیل"
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = if (stats.isReadyForFinalExport) EmeraldConfirm else TealVibrant
+                    text = "کالای مازاد",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Distinct Royal Indigo / Emerald Button for Final Report & Excel Export
+            Button(
+                onClick = onFinalizeExportClicked,
+                modifier = Modifier
+                    .weight(1.35f)
+                    .height(48.dp)
+                    .testTag("finalize_export_sticky_btn"),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (stats.isReadyForFinalExport) EmeraldConfirm else IndigoAccent,
+                    contentColor = Color.White
+                ),
+                contentPadding = PaddingValues(horizontal = 10.dp)
             ) {
-                Button(
-                    onClick = onAddSurplusClicked,
-                    modifier = Modifier
-                        .weight(1.1f)
-                        .height(54.dp)
-                        .testTag("add_surplus_sticky_btn"),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = NavyDeep,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "افزودن کالای مازاد",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Button(
-                    onClick = onFinalizeExportClicked,
-                    modifier = Modifier
-                        .weight(1.25f)
-                        .height(54.dp)
-                        .testTag("finalize_export_sticky_btn"),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (stats.isReadyForFinalExport) EmeraldConfirm else TealVibrant,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(
-                        imageVector = if (stats.isReadyForFinalExport) Icons.Default.CheckCircle else Icons.Default.FileDownload,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "تایید نهایی و خروجی اکسل",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                Icon(
+                    imageVector = if (stats.isReadyForFinalExport) Icons.Default.CheckCircle else Icons.Default.Assessment,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (stats.isReadyForFinalExport) {
+                        "گزارش نهایی و اکسل ✓"
+                    } else {
+                        "گزارش و خروجی اکسل (${PersianTextUtils.toPersianDigits(stats.completedCount)}/${PersianTextUtils.toPersianDigits(stats.totalCount)})"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }
@@ -587,8 +532,8 @@ private fun EmptyAuditListPlaceholder(
 ) {
     Box(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(28.dp),
+            .fillMaxWidth()
+            .padding(vertical = 48.dp, horizontal = 24.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -599,29 +544,23 @@ private fun EmptyAuditListPlaceholder(
                 imageVector = Icons.Default.Inventory,
                 contentDescription = null,
                 tint = SlateTextMuted,
-                modifier = Modifier.size(54.dp)
+                modifier = Modifier.size(48.dp)
             )
             Text(
                 text = if (searchQuery.isNotBlank()) {
                     "هیچ دارایی با عبارت «$searchQuery» یافت نشد."
                 } else {
-                    "هیچ ردیفی در تب «${selectedFilter.persianLabel}» وجود ندارد."
+                    "هیچ ردیفی در بخش «${selectedFilter.persianLabel}» وجود ندارد."
                 },
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = SlateTextPrimary,
                 textAlign = TextAlign.Center
             )
-            Text(
-                text = "می‌توانید فیلترها را پاک کنید یا فایل اکسل جدیدی وارد نمایید.",
-                style = MaterialTheme.typography.bodySmall,
-                color = SlateTextSecondary,
-                textAlign = TextAlign.Center
-            )
             Button(
                 onClick = onClearFilters,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = TealVibrant)
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = IndigoAccent)
             ) {
                 Text(
                     text = "نمایش همه دارایی‌ها",

@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -30,6 +31,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -51,9 +53,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.example.model.AuditFilterTab
+import com.example.model.AuditSummaryStats
 import com.example.model.PersianTextUtils
 import com.example.ui.ValidationBlockAlert
+import com.example.ui.theme.AmberBorder
+import com.example.ui.theme.AmberContainer
+import com.example.ui.theme.AmberSurplus
+import com.example.ui.theme.AmberText
 import com.example.ui.theme.CoralBorder
 import com.example.ui.theme.CoralContainer
 import com.example.ui.theme.CoralReject
@@ -65,6 +71,10 @@ import com.example.ui.theme.EmeraldText
 import com.example.ui.theme.IndigoAccent
 import com.example.ui.theme.IndigoContainer
 import com.example.ui.theme.IndigoOnContainer
+import com.example.ui.theme.MissingBorder
+import com.example.ui.theme.MissingContainer
+import com.example.ui.theme.MissingPurple
+import com.example.ui.theme.NavyDeep
 import com.example.ui.theme.SlateBorder
 import com.example.ui.theme.SlateSurface
 import com.example.ui.theme.SlateSurfaceVariant
@@ -187,7 +197,7 @@ fun ValidationBlockDialog(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "نمایش اقلام در انتظار بررسی",
+                        text = "نمایش اقلام در انتظار",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -209,6 +219,7 @@ fun ValidationBlockDialog(
 @Composable
 fun ExcelExportReadyDialog(
     payload: ExcelExportPayload,
+    stats: AuditSummaryStats,
     onSaveToDeviceClicked: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -227,198 +238,290 @@ fun ExcelExportReadyDialog(
             shape = RoundedCornerShape(20.dp),
             color = SlateSurface
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // Distinct Navy Executive Report Header
                 Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(NavyDeep)
+                        .padding(horizontal = 18.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.CheckCircle,
+                        imageVector = Icons.Default.Assessment,
                         contentDescription = null,
-                        tint = EmeraldConfirm,
+                        tint = EmeraldBorder,
                         modifier = Modifier.size(28.dp)
                     )
                     Column {
                         Text(
-                            text = "تایید نهایی و تولید فایل اکسل (.xlsx) انجام شد",
+                            text = "گزارش نهایی اموال‌گردانی و خروجی اکسل",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = EmeraldText
+                            color = Color.White
                         )
                         Text(
-                            text = "نام فایل: ${payload.fileName} • شامل ۲ شیت «گزارش نهایی» و «خلاصه وضعیت»",
+                            text = "فایل: ${payload.fileName} • ۲ شیت «گزارش نهایی» و «خلاصه وضعیت»",
                             style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Distinct Color-Coded Summary Metrics Row in Report Dialog
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        DialogReportStatPill(
+                            label = "تأیید شده",
+                            count = stats.confirmedCount,
+                            bg = EmeraldContainer,
+                            border = EmeraldBorder,
+                            text = EmeraldText,
+                            modifier = Modifier.weight(1f)
+                        )
+                        DialogReportStatPill(
+                            label = "مغایرت",
+                            count = stats.discrepancyCount,
+                            bg = CoralContainer,
+                            border = CoralBorder,
+                            text = CoralText,
+                            modifier = Modifier.weight(1f)
+                        )
+                        DialogReportStatPill(
+                            label = "مازاد",
+                            count = stats.surplusCount,
+                            bg = AmberContainer,
+                            border = AmberBorder,
+                            text = AmberText,
+                            modifier = Modifier.weight(1f)
+                        )
+                        DialogReportStatPill(
+                            label = "ناموجود",
+                            count = stats.missingItemCount,
+                            bg = MissingContainer,
+                            border = MissingBorder,
+                            text = MissingPurple,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    // Sheet selector preview tabs
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = selectedSheetTab == 0,
+                            onClick = { selectedSheetTab = 0 },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = IndigoAccent,
+                                selectedLabelColor = Color.White,
+                                selectedLeadingIconColor = Color.White
+                            ),
+                            label = {
+                                Text(
+                                    text = "شیت ۱: گزارش نهایی (${PersianTextUtils.toPersianDigits(payload.finalReportRows.size - 1)})",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.TableChart,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        )
+
+                        FilterChip(
+                            selected = selectedSheetTab == 1,
+                            onClick = { selectedSheetTab = 1 },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = IndigoAccent,
+                                selectedLabelColor = Color.White,
+                                selectedLeadingIconColor = Color.White
+                            ),
+                            label = {
+                                Text(
+                                    text = "شیت ۲: خلاصه وضعیت",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.TableChart,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        )
+                    }
+
+                    // Sheet Data Preview Box with distinct row coloring
+                    val activeRows = if (selectedSheetTab == 0) payload.finalReportRows else payload.summarySheetRows
+                    Surface(
+                        color = SlateSurfaceVariant,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, SlateBorder),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 170.dp, max = 270.dp)
+                    ) {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            itemsIndexed(activeRows) { rowIdx, row ->
+                                val isHeader = rowIdx == 0
+                                val rowBg = when {
+                                    isHeader -> NavyDeep
+                                    rowIdx % 2 == 0 -> SlateSurface
+                                    else -> IndigoContainer.copy(alpha = 0.35f)
+                                }
+                                Row(
+                                    modifier = Modifier
+                                        .background(rowBg, RoundedCornerShape(6.dp))
+                                        .padding(vertical = 6.dp, horizontal = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    row.forEach { cell ->
+                                        Text(
+                                            text = PersianTextUtils.toPersianDigits(cell),
+                                            style = if (isHeader) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodySmall,
+                                            fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isHeader) Color.White else SlateTextPrimary,
+                                            modifier = Modifier.width(135.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Download & Share Buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = onSaveToDeviceClicked,
+                            modifier = Modifier
+                                .weight(1.3f)
+                                .height(48.dp)
+                                .testTag("save_xlsx_device_btn"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = EmeraldConfirm,
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "دانلود اکسل (.xlsx)",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                runCatching {
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                        putExtra(Intent.EXTRA_STREAM, payload.shareUri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(
+                                        Intent.createChooser(shareIntent, "ارسال فایل اکسل اموال‌گردانی")
+                                    )
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .testTag("share_xlsx_btn"),
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = null,
+                                modifier = Modifier.size(17.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "اشتراک‌گذاری",
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+                    }
+
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text(
+                            text = "بستن پنجره",
+                            style = MaterialTheme.typography.labelLarge,
                             color = SlateTextSecondary
                         )
                     }
                 }
-
-                // Sheet selector preview tabs
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = selectedSheetTab == 0,
-                        onClick = { selectedSheetTab = 0 },
-                        label = {
-                            Text(
-                                text = "شیت ۱: گزارش نهایی (${PersianTextUtils.toPersianDigits(payload.finalReportRows.size - 1)} ردیف)",
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.TableChart,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    )
-
-                    FilterChip(
-                        selected = selectedSheetTab == 1,
-                        onClick = { selectedSheetTab = 1 },
-                        label = {
-                            Text(
-                                text = "شیت ۲: خلاصه وضعیت",
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.TableChart,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    )
-                }
-
-                // Sheet Data Preview Box
-                val activeRows = if (selectedSheetTab == 0) payload.finalReportRows else payload.summarySheetRows
-                Surface(
-                    color = SlateSurfaceVariant,
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, SlateBorder),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 180.dp, max = 300.dp)
-                ) {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        itemsIndexed(activeRows) { rowIdx, row ->
-                            val isHeader = rowIdx == 0
-                            Row(
-                                modifier = Modifier
-                                    .background(
-                                        if (isHeader) IndigoContainer else Color.Transparent,
-                                        RoundedCornerShape(6.dp)
-                                    )
-                                    .padding(vertical = 6.dp, horizontal = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                row.forEach { cell ->
-                                    Text(
-                                        text = PersianTextUtils.toPersianDigits(cell),
-                                        style = if (isHeader) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodySmall,
-                                        fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isHeader) IndigoOnContainer else SlateTextPrimary,
-                                        modifier = Modifier.width(135.dp)
-                                    )
-                                }
-                            }
-                            if (isHeader) {
-                                HorizontalDivider(color = SlateBorder)
-                            }
-                        }
-                    }
-                }
-
-                // Download & Share Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Button(
-                        onClick = onSaveToDeviceClicked,
-                        modifier = Modifier
-                            .weight(1.3f)
-                            .height(48.dp)
-                            .testTag("save_xlsx_device_btn"),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = EmeraldConfirm,
-                            contentColor = Color.White
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "دانلود و ذخیره اکسل (.xlsx)",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    OutlinedButton(
-                        onClick = {
-                            runCatching {
-                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                                    putExtra(Intent.EXTRA_STREAM, payload.shareUri)
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                context.startActivity(
-                                    Intent.createChooser(shareIntent, "ارسال فایل اکسل اموال‌گردانی")
-                                )
-                            }
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                            .testTag("share_xlsx_btn"),
-                        shape = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = null,
-                            modifier = Modifier.size(17.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "اشتراک‌گذاری",
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
-                }
-
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.End)
-                ) {
-                    Text(
-                        text = "بستن پنجره",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = SlateTextSecondary
-                    )
-                }
             }
+        }
+    }
+}
+
+@Composable
+private fun DialogReportStatPill(
+    label: String,
+    count: Int,
+    bg: Color,
+    border: Color,
+    text: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        color = bg,
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, border)
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = PersianTextUtils.toPersianDigits(count),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = text
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = text
+            )
         }
     }
 }

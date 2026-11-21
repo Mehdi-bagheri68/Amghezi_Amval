@@ -5,9 +5,7 @@ import androidx.room.PrimaryKey
 
 enum class AppScreen {
     LOGIN,
-    HOME_HUB,
-    ASSET_INVENTORY,
-    DOCUMENT_UPLOAD
+    ASSET_INVENTORY
 }
 
 data class UserSession(
@@ -16,36 +14,6 @@ data class UserSession(
     val roleTitle: String,
     val branchName: String,
     val branchCode: String
-)
-
-enum class DocumentCategory(val code: String, val persianTitle: String, val subtitle: String) {
-    MINUTES("MINUTES", "صورتجلسه", "صورتجلسه امضاشده اموال‌گردانی شعبه"),
-    INVOICE("INVOICE", "فاکتور", "فاکتور خرید، رسید انبار یا حواله انتقال"),
-    ASSET_PHOTO("ASSET_PHOTO", "تصویر کالا", "تصاویر کلی چیدمان و پلاک دارایی‌ها")
-}
-
-data class StagedDocument(
-    val id: String,
-    val title: String,
-    val category: DocumentCategory,
-    val photoPath: String,
-    val fileName: String,
-    val sizeKb: Int
-)
-
-@Entity(tableName = "uploaded_documents")
-data class UploadedDocumentRecord(
-    @PrimaryKey
-    val id: String,
-    val storeBranch: String,
-    val categoryCode: String,
-    val categoryTitle: String,
-    val title: String,
-    val photoPath: String,
-    val fileName: String,
-    val sizeKb: Int,
-    val uploadedBy: String,
-    val uploadedAt: Long = System.currentTimeMillis()
 )
 
 enum class AssetStatus(val code: String, val persianTitle: String) {
@@ -64,7 +32,7 @@ enum class AssetStatus(val code: String, val persianTitle: String) {
 
 enum class AuditFilterTab(val code: String, val persianLabel: String) {
     ALL("ALL", "همه"),
-    PENDING("PENDING", "در انتظار بررسی"),
+    PENDING("PENDING", "در انتظار"),
     CONFIRMED("CONFIRMED", "تایید شده"),
     DISCREPANCY("DISCREPANCY", "مغایرت"),
     SURPLUS("SURPLUS", "مازاد"),

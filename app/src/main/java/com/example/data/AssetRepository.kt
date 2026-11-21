@@ -3,7 +3,6 @@ package com.example.data
 import com.example.model.AssetRecord
 import com.example.model.AssetStatus
 import com.example.model.StoreBranches
-import com.example.model.UploadedDocumentRecord
 import kotlinx.coroutines.flow.Flow
 
 class AssetRepository(private val assetDao: AssetDao) {
@@ -12,9 +11,6 @@ class AssetRepository(private val assetDao: AssetDao) {
 
     fun observeAssetsForBranch(branch: String): Flow<List<AssetRecord>> =
         assetDao.observeAssetsByBranch(branch)
-
-    fun observeDocumentsForBranch(branch: String): Flow<List<UploadedDocumentRecord>> =
-        assetDao.observeDocumentsByBranch(branch)
 
     suspend fun ensureSeededForBranches() {
         for ((index, branch) in StoreBranches.ALL_BRANCHES.withIndex()) {
@@ -50,14 +46,6 @@ class AssetRepository(private val assetDao: AssetDao) {
         assetDao.deleteById(id)
     }
 
-    suspend fun insertUploadedDocuments(docs: List<UploadedDocumentRecord>) {
-        assetDao.insertUploadedDocuments(docs)
-    }
-
-    suspend fun deleteUploadedDocument(id: String) {
-        assetDao.deleteUploadedDocumentById(id)
-    }
-
     companion object {
         fun buildSampleAssetsForBranch(branch: String, branchIndex: Int): List<AssetRecord> {
             val prefix = (branchIndex * 1000)
@@ -65,7 +53,7 @@ class AssetRepository(private val assetDao: AssetDao) {
                 AssetRecord(
                     id = "${branch}_1",
                     storeBranch = branch,
-                    description = "لپتاپ Dell Latitude 5420 - واحد مدیریت فروشگاه",
+                    description = "لپتاپ Dell Latitude 5420 - واحد مدیریت",
                     assetTag1 = "${prefix + 10928}",
                     assetTag2 = "${prefix + 29873}",
                     assetTag3 = "ندارد",
@@ -76,7 +64,7 @@ class AssetRepository(private val assetDao: AssetDao) {
                 AssetRecord(
                     id = "${branch}_2",
                     storeBranch = branch,
-                    description = "پایانه فروشگاهی (POS) لمسی Verifone V200c صندوق ۱",
+                    description = "پایانه فروشگاهی (POS) Verifone V200c صندوق ۱",
                     assetTag1 = "${prefix + 44512}",
                     assetTag2 = "${prefix + 88104}",
                     assetTag3 = "ناخوانا",
@@ -87,7 +75,7 @@ class AssetRepository(private val assetDao: AssetDao) {
                 AssetRecord(
                     id = "${branch}_3",
                     storeBranch = branch,
-                    description = "بارکدخوان دوبعدی بی‌سیم Honeywell Xenon 1952g",
+                    description = "بارکدخوان دوبعدی Honeywell Xenon 1952g",
                     assetTag1 = "${prefix + 33219}",
                     assetTag2 = "ندارد",
                     assetTag3 = "ندارد",
@@ -98,7 +86,7 @@ class AssetRepository(private val assetDao: AssetDao) {
                 AssetRecord(
                     id = "${branch}_4",
                     storeBranch = branch,
-                    description = "چاپگر حرارتی صدور فیش Bixolon SRP-350III صندوق ۲",
+                    description = "چاپگر حرارتی فیش Bixolon SRP-350III صندوق ۲",
                     assetTag1 = "${prefix + 55890}",
                     assetTag2 = "${prefix + 55891}",
                     assetTag3 = "ندارد",
@@ -109,7 +97,7 @@ class AssetRepository(private val assetDao: AssetDao) {
                 AssetRecord(
                     id = "${branch}_5",
                     storeBranch = branch,
-                    description = "سوییچ شبکه ۲۴ پورت مدیریتی Cisco Catalyst 2960X رک مرکزی",
+                    description = "سوییچ شبکه ۲۴ پورت Cisco Catalyst 2960X",
                     assetTag1 = "${prefix + 77401}",
                     assetTag2 = "${prefix + 77402}",
                     assetTag3 = "${prefix + 77403}",

@@ -12,11 +12,8 @@ import com.example.model.AssetRecord
 import com.example.model.AssetStatus
 import com.example.model.AuditFilterTab
 import com.example.model.AuditSummaryStats
-import com.example.model.DocumentCategory
 import com.example.model.PersianTextUtils
-import com.example.model.StagedDocument
 import com.example.model.StoreBranches
-import com.example.model.UploadedDocumentRecord
 import com.example.model.UserSession
 import com.example.util.CompressedPhotoResult
 import com.example.util.ExcelExportPayload
@@ -58,7 +55,7 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
     val userSession: StateFlow<UserSession?> = _userSession.asStateFlow()
 
     private val _currentScreen = MutableStateFlow(
-        if (_userSession.value != null) AppScreen.HOME_HUB else AppScreen.LOGIN
+        if (_userSession.value != null) AppScreen.ASSET_INVENTORY else AppScreen.LOGIN
     )
     val currentScreen: StateFlow<AppScreen> = _currentScreen.asStateFlow()
 
@@ -78,8 +75,8 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
     private val _activeDiscrepancyAssetId = MutableStateFlow<String?>(null)
     val activeDiscrepancyAssetId: StateFlow<String?> = _activeDiscrepancyAssetId.asStateFlow()
 
-    private val _highlightedPhotoAssetId = MutableStateFlow<String?>(null)
-    val highlightedPhotoAssetId: StateFlow<String?> = _highlightedPhotoAssetId.asStateFlow()
+    private val _expandedPhotoAssetId = MutableStateFlow<String?>(null)
+    val expandedPhotoAssetId: StateFlow<String?> = _expandedPhotoAssetId.asStateFlow()
 
     private val _showSurplusModal = MutableStateFlow(false)
     val showSurplusModal: StateFlow<Boolean> = _showSurplusModal.asStateFlow()
@@ -96,18 +93,7 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
     private val _isBusy = MutableStateFlow(false)
     val isBusy: StateFlow<Boolean> = _isBusy.asStateFlow()
 
-    // Document Upload Screen State
-    private val _selectedDocCategory = MutableStateFlow(DocumentCategory.MINUTES)
-    val selectedDocCategory: StateFlow<DocumentCategory> = _selectedDocCategory.asStateFlow()
-
-    private val _stagedDocuments = MutableStateFlow<List<StagedDocument>>(emptyList())
-    val stagedDocuments: StateFlow<List<StagedDocument>> = _stagedDocuments.asStateFlow()
-
-    private val _uploadProgress = MutableStateFlow<Float?>(null)
-    val uploadProgress: StateFlow<Float?> = _uploadProgress.asStateFlow()
-
     val branchAssets: StateFlow<List<AssetRecord>>
-    val branchUploadedDocuments: StateFlow<List<UploadedDocumentRecord>>
     val summaryStats: StateFlow<AuditSummaryStats>
     val filteredAssets: StateFlow<List<AssetRecord>>
 
@@ -121,14 +107,6 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
 
         branchAssets = _selectedBranch
             .flatMapLatest { branch -> repository.observeAssetsForBranch(branch) }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = emptyList()
-            )
-
-        branchUploadedDocuments = _selectedBranch
-            .flatMapLatest { branch -> repository.observeDocumentsForBranch(branch) }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),
@@ -216,7 +194,7 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _loginError.value = null
             _isLoggingIn.value = true
-            delay(550) // Smooth UX transition for login spinner
+            delay(450)
 
             val displayName = when {
                 cleanUser.contains("admin", ignoreCase = true) || cleanUser == "101" || cleanUser == "۱۰۱" ->
@@ -249,8 +227,8 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
                 .apply()
 
             _isLoggingIn.value = false
-            _currentScreen.value = AppScreen.HOME_HUB
-            _statusBanner.value = "خوش آمدید، ${session.fullName} • آماده ممیزی «$selectedBranch»"
+            _currentScreen.value = AppScreen.ASSET_INVENTORY
+            _statusBanner.value = "خوش آمدید، ${session.fullName} • لیست اموال «$selectedBranch» آماده بررسی است."
         }
     }
 
@@ -258,18 +236,8 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
         prefs.edit().putBoolean("is_logged_in", false).apply()
         _userSession.value = null
         _activeDiscrepancyAssetId.value = null
-        _highlightedPhotoAssetId.value = null
+        _expandedPhotoAssetId.value = null
         _currentScreen.value = AppScreen.LOGIN
-    }
-
-    fun navigateTo(screen: AppScreen) {
-        _currentScreen.value = screen
-    }
-
-    fun navigateBackToHub() {
-        _activeDiscrepancyAssetId.value = null
-        _highlightedPhotoAssetId.value = null
-        _currentScreen.value = AppScreen.HOME_HUB
     }
 
     private fun computeStats(assets: List<AssetRecord>): AuditSummaryStats {
@@ -320,7 +288,7 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
             branchCode = StoreBranches.codeForBranch(branch)
         )
         _activeDiscrepancyAssetId.value = null
-        _highlightedPhotoAssetId.value = null
+        _expandedPhotoAssetId.value = null
     }
 
     fun updateSearchQuery(query: String) {
@@ -347,81 +315,8 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
         _exportPayload.value = null
     }
 
-    // Document Upload Actions
-    fun selectDocumentCategory(category: DocumentCategory) {
-        _selectedDocCategory.value = category
-    }
-
-    fun addStagedDocument(
-        title: String,
-        category: DocumentCategory,
-        compressed: CompressedPhotoResult
-    ) {
-        val docTitle = title.trim().ifBlank {
-            "${category.persianTitle} - ${_selectedBranch.value}"
-        }
-        val item = StagedDocument(
-            id = UUID.randomUUID().toString(),
-            title = docTitle,
-            category = category,
-            photoPath = compressed.filePath,
-            fileName = compressed.fileName,
-            sizeKb = compressed.sizeKb
-        )
-        _stagedDocuments.value = _stagedDocuments.value + item
-        _statusBanner.value = "مدرک «${item.title}» آماده ارسال شد."
-    }
-
-    fun removeStagedDocument(id: String) {
-        val target = _stagedDocuments.value.firstOrNull { it.id == id }
-        if (target != null) {
-            ImageCompressor.deletePhotoFileIfExists(target.photoPath)
-            _stagedDocuments.value = _stagedDocuments.value.filterNot { it.id == id }
-        }
-    }
-
-    fun uploadAllStagedDocuments() {
-        val staged = _stagedDocuments.value
-        if (staged.isEmpty()) {
-            _statusBanner.value = "لطفاً ابتدا حداقل یک تصویر مدرک (صورتجلسه، فاکتور یا تصویر کالا) اضافه کنید."
-            return
-        }
-        if (_uploadProgress.value != null) return
-
-        viewModelScope.launch {
-            val branch = _selectedBranch.value
-            val uploader = _userSession.value?.fullName ?: "ممیز ارشد"
-            for (step in 1..10) {
-                _uploadProgress.value = step / 10f
-                delay(90)
-            }
-            val records = staged.map { item ->
-                UploadedDocumentRecord(
-                    id = item.id,
-                    storeBranch = branch,
-                    categoryCode = item.category.code,
-                    categoryTitle = item.category.persianTitle,
-                    title = item.title,
-                    photoPath = item.photoPath,
-                    fileName = item.fileName,
-                    sizeKb = item.sizeKb,
-                    uploadedBy = uploader
-                )
-            }
-            repository.insertUploadedDocuments(records)
-            _stagedDocuments.value = emptyList()
-            _uploadProgress.value = null
-            _statusBanner.value =
-                "${PersianTextUtils.toPersianDigits(records.size)} مستند با موفقیت در پرونده «$branch» بارگذاری و ثبت شد."
-        }
-    }
-
-    fun deleteUploadedDocumentRecord(doc: UploadedDocumentRecord) {
-        viewModelScope.launch {
-            ImageCompressor.deletePhotoFileIfExists(doc.photoPath)
-            repository.deleteUploadedDocument(doc.id)
-            _statusBanner.value = "مستند «${doc.title}» حذف شد."
-        }
+    fun togglePhotoBoxExpanded(assetId: String) {
+        _expandedPhotoAssetId.value = if (_expandedPhotoAssetId.value == assetId) null else assetId
     }
 
     // Asset Inventory Actions
@@ -433,10 +328,10 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
             repository.upsertAsset(updated)
             _activeDiscrepancyAssetId.value = null
             if (!updated.hasPhoto) {
-                _highlightedPhotoAssetId.value = asset.id
-                _statusBanner.value = "وضعیت «تایید» انتخاب شد. لطفاً عکس دارایی را جهت تکمیل ردیف ثبت کنید."
+                _expandedPhotoAssetId.value = asset.id
+                _statusBanner.value = "وضعیت «تایید» انتخاب شد. لطفاً عکس دارایی را ثبت کنید."
             } else {
-                _highlightedPhotoAssetId.value = null
+                _expandedPhotoAssetId.value = null
                 _statusBanner.value = "دارایی «${asset.description}» با موفقیت تایید شد."
             }
         }
@@ -452,8 +347,9 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 )
             }
-            _highlightedPhotoAssetId.value = null
-            _activeDiscrepancyAssetId.value = asset.id
+            _expandedPhotoAssetId.value = null
+            _activeDiscrepancyAssetId.value =
+                if (_activeDiscrepancyAssetId.value == asset.id) null else asset.id
         }
     }
 
@@ -488,6 +384,7 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
             _activeDiscrepancyAssetId.value = null
+            _expandedPhotoAssetId.value = null
             _statusBanner.value = "مغایرت برای «${asset.description}» با موفقیت ثبت شد."
         }
         return true
@@ -501,7 +398,7 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
             _activeDiscrepancyAssetId.value = null
-            _highlightedPhotoAssetId.value = null
+            _expandedPhotoAssetId.value = null
             _statusBanner.value = "ردیف «${asset.description}» به عنوان «موجود نیست» ثبت شد."
         }
     }
@@ -522,8 +419,9 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
                     photoSizeKb = result.sizeKb
                 )
             )
-            if (_highlightedPhotoAssetId.value == asset.id) {
-                _highlightedPhotoAssetId.value = null
+            // Collapse standalone photo box once attached so cards stay compact
+            if (_expandedPhotoAssetId.value == asset.id) {
+                _expandedPhotoAssetId.value = null
             }
             _statusBanner.value =
                 "تصویر با موفقیت فشرده‌سازی (${PersianTextUtils.toPersianDigits(result.sizeKb)} کیلوبایت) و ذخیره شد."
@@ -540,7 +438,7 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
                     photoSizeKb = 0
                 )
             )
-            _highlightedPhotoAssetId.value = asset.id
+            _expandedPhotoAssetId.value = asset.id
             _statusBanner.value = "تصویر حذف شد. برای تکمیل این ردیف، ثبت مجدد عکس الزامی است."
         }
     }
@@ -573,7 +471,7 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
             )
             repository.upsertAsset(newRecord)
             _showSurplusModal.value = false
-            _statusBanner.value = "کالای مازاد «${newRecord.description}» با موفقیت به لیست فروشگاه اضافه شد."
+            _statusBanner.value = "کالای مازاد «${newRecord.description}» با موفقیت به لیست اضافه شد."
         }
     }
 
@@ -586,7 +484,7 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
             result.onSuccess { importedRows ->
                 repository.replaceOrAppendImportedAssets(branch, importedRows, replaceCurrentList)
                 _statusBanner.value =
-                    "${PersianTextUtils.toPersianDigits(importedRows.size)} ردیف دارایی از فایل اکسل با موفقیت وارد شعبه «$branch» شد."
+                    "${PersianTextUtils.toPersianDigits(importedRows.size)} ردیف دارایی از اکسل وارد شعبه «$branch» شد."
             }.onFailure { err ->
                 _statusBanner.value = "خطا در خواندن فایل اکسل: ${err.message ?: "فرمت نامعتبر"}"
             }
@@ -617,7 +515,7 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 repository.replaceOrAppendImportedAssets(branch, imported, replaceExisting = false)
                 _statusBanner.value =
-                    "${PersianTextUtils.toPersianDigits(imported.size)} ردیف از قالب استاندارد اکسل (.xlsx) به لیست «$branch» افزوده شد."
+                    "${PersianTextUtils.toPersianDigits(imported.size)} ردیف از قالب اکسل نمونه به لیست «$branch» افزوده شد."
             }.onFailure { err ->
                 _statusBanner.value = "خطا در بارگذاری قالب اکسل: ${err.message}"
             }
@@ -630,7 +528,7 @@ class AuditViewModel(application: Application) : AndroidViewModel(application) {
             val branch = _selectedBranch.value
             repository.resetBranchToSampleData(branch)
             _activeDiscrepancyAssetId.value = null
-            _highlightedPhotoAssetId.value = null
+            _expandedPhotoAssetId.value = null
             _statusBanner.value = "اطلاعات شعبه «$branch» به ۵ ردیف پیش‌فرض بازنشانی شد."
         }
     }

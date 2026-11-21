@@ -453,7 +453,7 @@ fun LoginScreen(
                             )
                         } else {
                             Text(
-                                text = "ورود به پیشخوان اموال‌گردانی",
+                                text = "ورود به سامانه اموال‌گردانی",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )

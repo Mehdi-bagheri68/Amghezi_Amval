@@ -7,14 +7,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -26,7 +27,6 @@ import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.HideSource
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -40,7 +40,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,28 +47,33 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.model.AssetRecord
 import com.example.model.AssetStatus
 import com.example.model.PersianTextUtils
 import com.example.ui.theme.AmberBorder
+import com.example.ui.theme.AmberCardTint
 import com.example.ui.theme.AmberContainer
 import com.example.ui.theme.AmberSurplus
 import com.example.ui.theme.AmberText
 import com.example.ui.theme.CoralBorder
+import com.example.ui.theme.CoralCardTint
 import com.example.ui.theme.CoralContainer
 import com.example.ui.theme.CoralReject
 import com.example.ui.theme.CoralText
 import com.example.ui.theme.EmeraldBorder
+import com.example.ui.theme.EmeraldCardTint
 import com.example.ui.theme.EmeraldConfirm
 import com.example.ui.theme.EmeraldContainer
 import com.example.ui.theme.EmeraldText
-import com.example.ui.theme.IndigoAccent
 import com.example.ui.theme.IndigoContainer
 import com.example.ui.theme.IndigoOnContainer
 import com.example.ui.theme.MissingBorder
+import com.example.ui.theme.MissingCardTint
 import com.example.ui.theme.MissingContainer
-import com.example.ui.theme.MissingGray
+import com.example.ui.theme.MissingPurple
+import com.example.ui.theme.PendingAccent
 import com.example.ui.theme.SlateBorder
 import com.example.ui.theme.SlateSurface
 import com.example.ui.theme.SlateSurfaceVariant
@@ -78,264 +82,294 @@ import com.example.ui.theme.SlateTextPrimary
 import com.example.ui.theme.SlateTextSecondary
 import com.example.util.CompressedPhotoResult
 
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * High-density, color-coded Asset Audit Card (~110dp collapsed) so 4-5 items fit simultaneously on screen,
+ * while maintaining 48dp accessible touch targets and unmistakable status colors.
+ */
 @Composable
 fun AssetRowCard(
     index: Int,
     asset: AssetRecord,
     isDiscrepancyAccordionOpen: Boolean,
-    isPhotoBoxHighlighted: Boolean,
+    isPhotoBoxExpanded: Boolean,
     isDesktopTableMode: Boolean,
     onConfirmClicked: () -> Unit,
     onDiscrepancyClicked: () -> Unit,
     onMarkMissingClicked: () -> Unit,
+    onTogglePhotoBox: () -> Unit,
     onSaveDiscrepancy: (String, String, String) -> Boolean,
     onCloseDiscrepancy: () -> Unit,
     onPhotoCompressed: (CompressedPhotoResult) -> Unit,
     onPhotoDeleted: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val cardBorderColor = when {
-        isDiscrepancyAccordionOpen || asset.status == AssetStatus.DISCREPANCY.code -> CoralBorder
-        asset.isMissingMandatoryPhoto -> CoralReject
-        asset.isSurplus || asset.status == AssetStatus.SURPLUS.code -> AmberBorder
-        asset.status == AssetStatus.CONFIRMED.code -> EmeraldBorder
-        else -> SlateBorder
+    // Distinct Color Coding per Asset Status
+    val (stripColor, cardBg, borderColor) = when {
+        isDiscrepancyAccordionOpen || asset.status == AssetStatus.DISCREPANCY.code -> Triple(
+            CoralReject,
+            CoralCardTint,
+            CoralBorder
+        )
+        asset.isMissingMandatoryPhoto -> Triple(
+            CoralReject,
+            CoralCardTint.copy(alpha = 0.6f),
+            CoralReject
+        )
+        asset.isSurplus || asset.status == AssetStatus.SURPLUS.code -> Triple(
+            AmberSurplus,
+            AmberCardTint,
+            AmberBorder
+        )
+        asset.status == AssetStatus.CONFIRMED.code -> Triple(
+            EmeraldConfirm,
+            EmeraldCardTint,
+            EmeraldBorder
+        )
+        asset.status == AssetStatus.MISSING.code -> Triple(
+            MissingPurple,
+            MissingCardTint,
+            MissingBorder
+        )
+        else -> Triple(
+            PendingAccent.copy(alpha = 0.55f),
+            SlateSurface,
+            SlateBorder
+        )
     }
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .testTag("asset_row_card_${asset.id}"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = SlateSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp),
         border = BorderStroke(
-            width = if (asset.status != AssetStatus.PENDING.code || isDiscrepancyAccordionOpen) 1.5.dp else 1.dp,
-            color = cardBorderColor
+            width = if (asset.status != AssetStatus.PENDING.code || isDiscrepancyAccordionOpen) 1.4.dp else 1.dp,
+            color = borderColor
         )
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .height(IntrinsicSize.Min)
         ) {
-            if (isDesktopTableMode) {
-                DesktopTableStructureRow(
-                    index = index,
-                    asset = asset,
-                    onConfirmClicked = onConfirmClicked,
-                    onDiscrepancyClicked = onDiscrepancyClicked,
-                    onMarkMissingClicked = onMarkMissingClicked
-                )
-            } else {
-                MobileAuditCardHeader(
-                    index = index,
-                    asset = asset,
-                    onConfirmClicked = onConfirmClicked,
-                    onDiscrepancyClicked = onDiscrepancyClicked,
-                    onMarkMissingClicked = onMarkMissingClicked
-                )
-            }
+            // RTL Start (Right Edge) 5dp Bold Vertical Status Accent Strip
+            Box(
+                modifier = Modifier
+                    .width(5.dp)
+                    .fillMaxHeight()
+                    .background(stripColor)
+            )
 
-            // Show saved discrepancy summary when status is DISCREPANCY and accordion is closed
-            if (asset.status == AssetStatus.DISCREPANCY.code && !isDiscrepancyAccordionOpen) {
-                Surface(
-                    color = CoralContainer,
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, CoralBorder),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 10.dp, vertical = 9.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                if (isDesktopTableMode) {
+                    DesktopCompactRow(
+                        index = index,
+                        asset = asset,
+                        onConfirmClicked = onConfirmClicked,
+                        onDiscrepancyClicked = onDiscrepancyClicked,
+                        onMarkMissingClicked = onMarkMissingClicked,
+                        onTogglePhotoBox = onTogglePhotoBox
+                    )
+                } else {
+                    MobileCompactCardBody(
+                        index = index,
+                        asset = asset,
+                        onConfirmClicked = onConfirmClicked,
+                        onDiscrepancyClicked = onDiscrepancyClicked,
+                        onMarkMissingClicked = onMarkMissingClicked,
+                        onTogglePhotoBox = onTogglePhotoBox
+                    )
+                }
+
+                // Compact inline corrected-tag notice when DISCREPANCY is saved & accordion is collapsed
+                if (asset.status == AssetStatus.DISCREPANCY.code && !isDiscrepancyAccordionOpen) {
+                    Surface(
+                        color = CoralContainer,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, CoralBorder),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(onClick = onDiscrepancyClicked)
                     ) {
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "کد اموال واقعی / اصلاحی ثبت‌شده:",
+                                text = "اموال اصلاحی: ${PersianTextUtils.toPersianDigits(asset.correctedAssetTag1.ifBlank { "-" })}" +
+                                    if (asset.correctedAssetTag2.isNotBlank()) " | ${PersianTextUtils.toPersianDigits(asset.correctedAssetTag2)}" else "",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = CoralText
-                            )
-                            Text(
-                                text = buildString {
-                                    append("اموال ۱: ${PersianTextUtils.toPersianDigits(asset.correctedAssetTag1.ifBlank { "-" })}")
-                                    if (asset.correctedAssetTag2.isNotBlank()) {
-                                        append("  |  اموال ۲: ${PersianTextUtils.toPersianDigits(asset.correctedAssetTag2)}")
-                                    }
-                                    if (asset.correctedAssetTag3.isNotBlank()) {
-                                        append("  |  اموال ۳: ${PersianTextUtils.toPersianDigits(asset.correctedAssetTag3)}")
-                                    }
-                                },
-                                style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Bold,
-                                color = CoralText
+                                color = CoralText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
-                        }
-
-                        TextButton(onClick = onDiscrepancyClicked) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = "ویرایش مغایرت",
-                                modifier = Modifier.size(16.dp),
-                                tint = CoralReject
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "ویرایش مغایرت",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = CoralReject,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "ویرایش مغایرت",
+                                    tint = CoralReject,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = "ویرایش",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CoralReject
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            // Inline Discrepancy Accordion Box when DISCREPANCY is active
-            AnimatedVisibility(
-                visible = isDiscrepancyAccordionOpen,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                DiscrepancyBox(
-                    asset = asset,
-                    onPhotoCompressed = onPhotoCompressed,
-                    onPhotoDeleted = onPhotoDeleted,
-                    onSaveDiscrepancy = onSaveDiscrepancy,
-                    onCancel = onCloseDiscrepancy
-                )
-            }
+                // Inline Discrepancy Accordion Box
+                AnimatedVisibility(
+                    visible = isDiscrepancyAccordionOpen,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    DiscrepancyBox(
+                        asset = asset,
+                        onPhotoCompressed = onPhotoCompressed,
+                        onPhotoDeleted = onPhotoDeleted,
+                        onSaveDiscrepancy = onSaveDiscrepancy,
+                        onCancel = onCloseDiscrepancy
+                    )
+                }
 
-            // Mandatory Photo Capture/Upload Box when CONFIRMED or SURPLUS (or when photo already attached and accordion is closed)
-            val showStandalonePhotoBox = !isDiscrepancyAccordionOpen && (
-                asset.status == AssetStatus.CONFIRMED.code ||
-                    asset.status == AssetStatus.SURPLUS.code ||
-                    asset.isSurplus ||
-                    isPhotoBoxHighlighted ||
-                    (asset.status == AssetStatus.DISCREPANCY.code && (asset.hasPhoto || asset.isMissingMandatoryPhoto))
-                )
+                // Mandatory Photo Capture/Upload Box (only expands when photo is missing OR user taps the photo chip)
+                val showStandalonePhotoBox = !isDiscrepancyAccordionOpen && (
+                    asset.isMissingMandatoryPhoto || isPhotoBoxExpanded
+                    )
 
-            AnimatedVisibility(
-                visible = showStandalonePhotoBox,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                PhotoCaptureBox(
-                    assetId = asset.id,
-                    assetDescription = asset.description,
-                    assetTag = asset.correctedAssetTag1.ifBlank { asset.assetTag1 },
-                    assetCardCode = asset.assetCardCode,
-                    storeBranch = asset.storeBranch,
-                    photoUrl = asset.photoUrl,
-                    photoFileName = asset.photoFileName,
-                    photoSizeKb = asset.photoSizeKb,
-                    isHighlighted = isPhotoBoxHighlighted || asset.isMissingMandatoryPhoto,
-                    accentColor = if (asset.status == AssetStatus.DISCREPANCY.code) CoralReject else EmeraldConfirm,
-                    onPhotoCompressed = onPhotoCompressed,
-                    onPhotoDeleted = onPhotoDeleted
-                )
+                AnimatedVisibility(
+                    visible = showStandalonePhotoBox,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    PhotoCaptureBox(
+                        assetId = asset.id,
+                        assetDescription = asset.description,
+                        assetTag = asset.correctedAssetTag1.ifBlank { asset.assetTag1 },
+                        assetCardCode = asset.assetCardCode,
+                        storeBranch = asset.storeBranch,
+                        photoUrl = asset.photoUrl,
+                        photoFileName = asset.photoFileName,
+                        photoSizeKb = asset.photoSizeKb,
+                        isHighlighted = asset.isMissingMandatoryPhoto,
+                        accentColor = if (asset.status == AssetStatus.DISCREPANCY.code) CoralReject else EmeraldConfirm,
+                        onPhotoCompressed = onPhotoCompressed,
+                        onPhotoDeleted = onPhotoDeleted
+                    )
+                }
             }
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun MobileAuditCardHeader(
+private fun MobileCompactCardBody(
     index: Int,
     asset: AssetRecord,
     onConfirmClicked: () -> Unit,
     onDiscrepancyClicked: () -> Unit,
-    onMarkMissingClicked: () -> Unit
+    onMarkMissingClicked: () -> Unit,
+    onTogglePhotoBox: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        // Row 1: Title + Status / Surplus / Mandatory Photo Badges
+        // Line 1: Index + Bold Asset Title + Compact Status/Photo Badges
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Surface(
-                    color = SlateSurfaceVariant,
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, SlateBorder)
-                ) {
-                    Text(
-                        text = PersianTextUtils.toPersianDigits(index + 1),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = SlateTextSecondary,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-
-                Text(
-                    text = asset.description,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = SlateTextPrimary
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            StatusBadgesCluster(asset = asset)
-        }
-
-        // Row 2: Asset Tags 1/2/3 + Asset Card Code + Batch pills (matching screenshot style)
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            AssetTagChip(label = "تگ ۱", value = asset.assetTag1, isPrimary = true)
-            AssetTagChip(label = "تگ ۲", value = asset.assetTag2, isPrimary = false)
-            AssetTagChip(label = "تگ ۳", value = asset.assetTag3, isPrimary = false)
-
-            Surface(
-                color = IndigoContainer,
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(
-                    text = "کارت دارایی: ${asset.assetCardCode}",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = IndigoOnContainer,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
-
             Surface(
                 color = SlateSurfaceVariant,
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(6.dp),
                 border = BorderStroke(1.dp, SlateBorder)
             ) {
                 Text(
-                    text = "بچ: ${asset.batch}",
+                    text = PersianTextUtils.toPersianDigits(index + 1),
                     style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
                     color = SlateTextSecondary,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 )
             }
+
+            Text(
+                text = asset.description,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = SlateTextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+
+            CompactStatusBadge(asset = asset, onTogglePhotoBox = onTogglePhotoBox)
         }
 
-        // Row 3: Two prominent action buttons ("تایید" Green & "رد / مغایرت" Red) + subtle "موجود نیست"
-        AuditActionButtonsRow(
+        // Line 2: Compact Single-Row Metadata (Tag1, Tag2, Tag3/CardCode, Batch)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            MiniMetaChip(
+                text = "اموال ۱: ${PersianTextUtils.toPersianDigits(asset.assetTag1)}",
+                highlightWarn = asset.assetTag1 == "ندارد" || asset.assetTag1 == "ناخوانا",
+                bold = true
+            )
+            if (asset.assetTag2 != "ندارد" && asset.assetTag2.isNotBlank()) {
+                MiniMetaChip(
+                    text = "اموال ۲: ${PersianTextUtils.toPersianDigits(asset.assetTag2)}",
+                    highlightWarn = asset.assetTag2 == "ناخوانا",
+                    bold = false
+                )
+            }
+            Surface(
+                color = IndigoContainer,
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Text(
+                    text = asset.assetCardCode,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = IndigoOnContainer,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+            Text(
+                text = "• ${asset.batch}",
+                style = MaterialTheme.typography.labelSmall,
+                color = SlateTextMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        // Line 3: Single Compact Action Row (Confirm + Discrepancy + Missing on ONE row!)
+        CompactActionButtonsRow(
             asset = asset,
             onConfirmClicked = onConfirmClicked,
             onDiscrepancyClicked = onDiscrepancyClicked,
@@ -345,30 +379,30 @@ private fun MobileAuditCardHeader(
 }
 
 @Composable
-private fun DesktopTableStructureRow(
+private fun DesktopCompactRow(
     index: Int,
     asset: AssetRecord,
     onConfirmClicked: () -> Unit,
     onDiscrepancyClicked: () -> Unit,
-    onMarkMissingClicked: () -> Unit
+    onMarkMissingClicked: () -> Unit,
+    onTogglePhotoBox: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Col 1: Index + Description + Badges (weight 2.2f)
         Column(
             modifier = Modifier.weight(2.2f),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = "#${PersianTextUtils.toPersianDigits(index + 1)}",
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = SlateTextMuted
                 )
@@ -376,32 +410,32 @@ private fun DesktopTableStructureRow(
                     text = asset.description,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = SlateTextPrimary
+                    color = SlateTextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
-            StatusBadgesCluster(asset = asset)
+            CompactStatusBadge(asset = asset, onTogglePhotoBox = onTogglePhotoBox)
         }
 
-        // Col 2: Asset Tags 1, 2, 3 (weight 1.8f)
         Row(
-            modifier = Modifier.weight(1.8f),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.weight(1.7f),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AssetTagChip(label = "اموال ۱", value = asset.assetTag1, isPrimary = true)
-            AssetTagChip(label = "اموال ۲", value = asset.assetTag2, isPrimary = false)
-            AssetTagChip(label = "اموال ۳", value = asset.assetTag3, isPrimary = false)
+            MiniMetaChip("۱: ${PersianTextUtils.toPersianDigits(asset.assetTag1)}", asset.assetTag1 == "ناخوانا", true)
+            MiniMetaChip("۲: ${PersianTextUtils.toPersianDigits(asset.assetTag2)}", asset.assetTag2 == "ناخوانا", false)
+            MiniMetaChip("۳: ${PersianTextUtils.toPersianDigits(asset.assetTag3)}", asset.assetTag3 == "ناخوانا", false)
         }
 
-        // Col 3: Card Code & Batch (weight 1.1f)
         Column(
-            modifier = Modifier.weight(1.1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
-                text = "کارت: ${asset.assetCardCode}",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
+                text = asset.assetCardCode,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
                 color = IndigoOnContainer
             )
             Text(
@@ -411,9 +445,8 @@ private fun DesktopTableStructureRow(
             )
         }
 
-        // Col 4: Action Buttons (weight 2.1f)
         Box(modifier = Modifier.weight(2.1f)) {
-            AuditActionButtonsRow(
+            CompactActionButtonsRow(
                 asset = asset,
                 onConfirmClicked = onConfirmClicked,
                 onDiscrepancyClicked = onDiscrepancyClicked,
@@ -423,150 +456,141 @@ private fun DesktopTableStructureRow(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StatusBadgesCluster(asset: AssetRecord) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+private fun CompactStatusBadge(
+    asset: AssetRecord,
+    onTogglePhotoBox: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        if (asset.isSurplus || asset.status == AssetStatus.SURPLUS.code) {
-            Surface(
-                color = AmberContainer,
-                shape = RoundedCornerShape(8.dp),
-                border = BorderStroke(1.dp, AmberBorder)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Inventory2,
-                        contentDescription = null,
-                        tint = AmberSurplus,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Text(
-                        text = "کالای مازاد",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = AmberText
-                    )
-                }
-            }
-        }
-
         if (asset.isMissingMandatoryPhoto) {
             Surface(
-                color = CoralContainer,
-                shape = RoundedCornerShape(8.dp),
-                border = BorderStroke(1.dp, CoralBorder),
-                modifier = Modifier.testTag("mandatory_photo_badge_${asset.id}")
+                color = CoralReject,
+                shape = RoundedCornerShape(6.dp),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = onTogglePhotoBox)
+                    .testTag("mandatory_photo_badge_${asset.id}")
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.WarningAmber,
                         contentDescription = null,
-                        tint = CoralReject,
-                        modifier = Modifier.size(13.dp)
+                        tint = Color.White,
+                        modifier = Modifier.size(11.dp)
                     )
                     Text(
-                        text = "عکس اجباری است",
+                        text = "عکس اجباری",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = CoralText
+                        color = Color.White
+                    )
+                }
+            }
+        } else if (asset.hasPhoto) {
+            Surface(
+                color = EmeraldContainer,
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(1.dp, EmeraldBorder),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClick = onTogglePhotoBox)
+                    .testTag("photo_attached_chip_${asset.id}")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PhotoCamera,
+                        contentDescription = "مشاهده یا تغییر عکس",
+                        tint = EmeraldConfirm,
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Text(
+                        text = "عکس ✓",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = EmeraldText
                     )
                 }
             }
         }
 
-        val (statusBg, statusBorder, statusText, statusLabel) = when (asset.status) {
-            AssetStatus.CONFIRMED.code -> Quadruple(
-                EmeraldContainer,
-                EmeraldBorder,
-                EmeraldText,
-                if (asset.hasPhoto) "تایید شده ✓" else "تایید (در انتظار عکس)"
+        val (bg, textCol, label) = when {
+            asset.isSurplus || asset.status == AssetStatus.SURPLUS.code -> Triple(
+                AmberSurplus,
+                Color.White,
+                "مازاد"
             )
-            AssetStatus.DISCREPANCY.code -> Quadruple(
-                CoralContainer,
-                CoralBorder,
-                CoralText,
-                if (asset.isRowComplete) "مغایرت ثبت‌شده" else "مغایرت (ناقص)"
+            asset.status == AssetStatus.CONFIRMED.code -> Triple(
+                EmeraldConfirm,
+                Color.White,
+                "تأیید شده"
             )
-            AssetStatus.MISSING.code -> Quadruple(
-                MissingContainer,
-                MissingBorder,
-                MissingGray,
-                "موجود نیست"
+            asset.status == AssetStatus.DISCREPANCY.code -> Triple(
+                CoralReject,
+                Color.White,
+                "مغایرت"
             )
-            AssetStatus.SURPLUS.code -> Quadruple(
-                AmberContainer,
-                AmberBorder,
-                AmberText,
-                if (asset.hasPhoto) "ثبت مازاد ✓" else "مازاد (بدون عکس)"
+            asset.status == AssetStatus.MISSING.code -> Triple(
+                MissingPurple,
+                Color.White,
+                "ناموجود"
             )
-            else -> Quadruple(
+            else -> Triple(
                 SlateSurfaceVariant,
-                SlateBorder,
-                SlateTextMuted,
-                "در انتظار بررسی"
+                SlateTextSecondary,
+                "در انتظار"
             )
         }
 
         Surface(
-            color = statusBg,
-            shape = RoundedCornerShape(8.dp),
-            border = BorderStroke(1.dp, statusBorder)
+            color = bg,
+            shape = RoundedCornerShape(6.dp)
         ) {
             Text(
-                text = statusLabel,
+                text = label,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = statusText,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                color = textCol,
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
             )
         }
     }
 }
 
 @Composable
-private fun AssetTagChip(
-    label: String,
-    value: String,
-    isPrimary: Boolean
+private fun MiniMetaChip(
+    text: String,
+    highlightWarn: Boolean,
+    bold: Boolean
 ) {
-    val isMissingOrIllegible = value == "ندارد" || value == "ناخوانا"
-    val bgColor = when {
-        isMissingOrIllegible -> AmberContainer.copy(alpha = 0.7f)
-        isPrimary -> SlateSurfaceVariant
-        else -> SlateSurfaceVariant.copy(alpha = 0.7f)
-    }
-    val borderColor = when {
-        isMissingOrIllegible -> AmberBorder
-        else -> SlateBorder
-    }
     Surface(
-        color = bgColor,
-        shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, borderColor)
+        color = if (highlightWarn) AmberContainer else SlateSurfaceVariant,
+        shape = RoundedCornerShape(6.dp),
+        border = BorderStroke(1.dp, if (highlightWarn) AmberBorder else SlateBorder.copy(alpha = 0.7f))
     ) {
         Text(
-            text = "$label: ${PersianTextUtils.toPersianDigits(value)}",
+            text = text,
             style = MaterialTheme.typography.labelSmall,
-            fontWeight = if (isPrimary) FontWeight.Bold else FontWeight.Medium,
-            color = if (isMissingOrIllegible) AmberText else SlateTextPrimary,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium,
+            color = if (highlightWarn) AmberText else SlateTextPrimary,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
         )
     }
 }
 
 @Composable
-private fun AuditActionButtonsRow(
+private fun CompactActionButtonsRow(
     asset: AssetRecord,
     onConfirmClicked: () -> Unit,
     onDiscrepancyClicked: () -> Unit,
@@ -576,124 +600,92 @@ private fun AuditActionButtonsRow(
     val isDiscrepancy = asset.status == AssetStatus.DISCREPANCY.code
     val isMissing = asset.status == AssetStatus.MISSING.code
 
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Button A: Confirm (Emerald Green) — 48dp accessible height
+        Button(
+            onClick = onConfirmClicked,
+            modifier = Modifier
+                .weight(1.1f)
+                .height(48.dp)
+                .testTag("confirm_btn_${asset.id}"),
+            shape = RoundedCornerShape(10.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isConfirmed) EmeraldConfirm else EmeraldConfirm.copy(alpha = 0.88f),
+                contentColor = Color.White
+            ),
+            contentPadding = PaddingValues(horizontal = 8.dp)
         ) {
-            // Button A: "تایید" (Confirm - Emerald Green)
-            Button(
-                onClick = onConfirmClicked,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp)
-                    .testTag("confirm_btn_${asset.id}"),
-                shape = RoundedCornerShape(11.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isConfirmed) EmeraldConfirm else EmeraldConfirm.copy(alpha = 0.9f),
-                    contentColor = Color.White
-                ),
-                elevation = ButtonDefaults.buttonElevation(
-                    defaultElevation = if (isConfirmed) 3.dp else 0.dp
-                )
-            ) {
-                Icon(
-                    imageVector = if (isConfirmed && asset.hasPhoto) Icons.Default.CheckCircle else Icons.Default.Check,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "تایید",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            // Button B: "رد / مغایرت" (Reject / Discrepancy - Coral Red)
-            Button(
-                onClick = onDiscrepancyClicked,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp)
-                    .testTag("discrepancy_btn_${asset.id}"),
-                shape = RoundedCornerShape(11.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isDiscrepancy) CoralReject else CoralReject.copy(alpha = 0.9f),
-                    contentColor = Color.White
-                ),
-                elevation = ButtonDefaults.buttonElevation(
-                    defaultElevation = if (isDiscrepancy) 3.dp else 0.dp
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Cancel,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "رد / مغایرت",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            Icon(
+                imageVector = if (isConfirmed && asset.hasPhoto) Icons.Default.CheckCircle else Icons.Default.Check,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "تایید",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold
+            )
         }
 
-        // Secondary Action: Subtle "موجود نیست" (Not Found / Missing) option + photo status hint
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+        // Button B: Discrepancy (Bold Crimson Red) — 48dp accessible height
+        Button(
+            onClick = onDiscrepancyClicked,
+            modifier = Modifier
+                .weight(1.15f)
+                .height(48.dp)
+                .testTag("discrepancy_btn_${asset.id}"),
+            shape = RoundedCornerShape(10.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isDiscrepancy) CoralReject else CoralReject.copy(alpha = 0.88f),
+                contentColor = Color.White
+            ),
+            contentPadding = PaddingValues(horizontal = 8.dp)
         ) {
-            TextButton(
-                onClick = onMarkMissingClicked,
-                modifier = Modifier.testTag("missing_btn_${asset.id}"),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = if (isMissing) CoralText else SlateTextSecondary
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.HideSource,
-                    contentDescription = null,
-                    modifier = Modifier.size(15.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = if (isMissing) "وضعیت فعلی: موجود نیست (ثبت‌شده)" else "موجود نیست (مفقودی در فروشگاه)",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = if (isMissing) FontWeight.Bold else FontWeight.Normal
-                )
-            }
+            Icon(
+                imageVector = Icons.Default.Cancel,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "رد / مغایرت",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
 
-            if (asset.hasPhoto) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PhotoCamera,
-                        contentDescription = null,
-                        tint = EmeraldConfirm,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = "دارای تصویر پیوست",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = EmeraldText,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
+        // Button C: Missing / Absent (Distinct Purple) — on the SAME row!
+        OutlinedButton(
+            onClick = onMarkMissingClicked,
+            modifier = Modifier
+                .weight(0.85f)
+                .height(48.dp)
+                .testTag("missing_btn_${asset.id}"),
+            shape = RoundedCornerShape(10.dp),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = if (isMissing) MissingPurple else MissingContainer.copy(alpha = 0.6f),
+                contentColor = if (isMissing) Color.White else MissingPurple
+            ),
+            border = BorderStroke(1.dp, if (isMissing) MissingPurple else MissingBorder),
+            contentPadding = PaddingValues(horizontal = 6.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.HideSource,
+                contentDescription = null,
+                modifier = Modifier.size(15.dp)
+            )
+            Spacer(modifier = Modifier.width(3.dp))
+            Text(
+                text = "ناموجود",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
         }
     }
 }
-
-private data class Quadruple<A, B, C, D>(
-    val first: A,
-    val second: B,
-    val third: C,
-    val fourth: D
-)
